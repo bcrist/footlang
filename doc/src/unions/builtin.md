@@ -16,6 +16,8 @@ bool :: union : u1 {
     0 => .false
     1 => .true
 }
+true :: bool.true
+false :: bool.false
 ```
 
 # `cmp`

@@ -1,6 +1,3 @@
-/* Tomorrow Night Eighties Theme */
-/* Original theme - https://github.com/chriskempson/tomorrow-theme */
-/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
 .hljs-comment {
     color: #595;
 }
@@ -30,12 +27,13 @@
     color: #ce9178;
 }
 
-
 .hljs-symbol,
 .hljs-bullet {
     color: #ffcc66;
 }
 
+.hljs-function,
+.hljs-title-function,
 .hljs-built_in,
 .hljs-builtin-name {
     color: #DCDCAA;

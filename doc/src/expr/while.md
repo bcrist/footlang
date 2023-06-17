@@ -1,5 +1,5 @@
 # Conditionally Bounded Loops
-The `while` keyword allows an optional-typed expression to be evaluated repeatedly, until it becomes non-`nil`, or until a condition expression is no longer `.true`, whichever happens first:
+The `while` keyword allows an optional-typed expression to be evaluated repeatedly, until it becomes non-`nil`, or until a condition expression is no longer `true`, whichever happens first:
 ```verdi
 while condition_expr optional_expr
 ```

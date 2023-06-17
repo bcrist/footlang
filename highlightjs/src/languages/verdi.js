@@ -7,7 +7,7 @@ export default function (hljs) {
 
   const KEYWORDS =
     "and break catch defer distinct else error errordefer export fn for if nil or packed not " +
-    "return struct match try union unreachable while until repeat error with only mut as in is";
+    "return struct match try union unreachable while until repeat error with only mut as in is true false";
   const TYPES = {
     className: "type",
     variants: [
@@ -116,13 +116,13 @@ export default function (hljs) {
   };
 
   const FUNCTION = {
-    className: "title.function",
+    className: "function",
     variants: [
       {
-        match: "\\b\\'[a-zA-Z_][a-zA-Z0-9_<>]*\\'?\\b",
+        match: "\\s'[a-zA-Z_][a-zA-Z0-9_]*'?\\s",
       },
       {
-        match: "\\b[a-zA-Z_][a-zA-Z0-9_<>]*\\'\\b",
+        match: "\\s[a-zA-Z_][a-zA-Z0-9_<>]*'\\s",
       },
     ],
     relevance: 0,

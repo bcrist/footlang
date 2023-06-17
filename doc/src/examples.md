@@ -42,11 +42,11 @@ main :: fn {
         prime: mut = delta
         with i := prime / 2  if not data[i] {
             try @io.stdout 'print' .[ "{}\n", prime ]
-            data[i] = .true
+            data[i] = true
         }
         prime = @narrow prime + delta
         while prime <= max_prime {
-            data[prime / 2] = .true
+            data[prime / 2] = true
             prime = @narrow prime + delta
         }
         delta = @narrow delta + 2

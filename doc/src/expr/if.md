@@ -1,5 +1,5 @@
 # Conditional Expressions
-The `if` keyword is used to conditionally evaluate an expression.  It is followed by two expressions.  The first expression is always evaluated, and its result is coerced to `bool`.  If the result is `.true` then the second expression is evaluated, and becomes the `if` expression's result.  Otherwise the `if` expression's result is `nil`.
+The `if` keyword is used to conditionally evaluate an expression.  It is followed by two expressions.  The first expression is always evaluated, and its result is coerced to `bool`.  If the result is `true` then the second expression is evaluated, and becomes the `if` expression's result.  Otherwise the `if` expression's result is `nil`.
 
 The type of the `if` expression is the peer type resolution of the second expression and `nil`.  In other words, the second expression's result type is made optional, if it is not already.
 ```verdi

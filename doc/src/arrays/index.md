@@ -5,7 +5,7 @@ An array is a constant number of homogeneous values (i.e. having the same type),
 The `[ ... ]` prefix operator turns an element type into an array type.  The type of the index is placed within the brackets, and the type of the element is placed on the right.
 ```verdi
 A :: [u4] u32       // 16 elements, indexed 0-15
-B :: [bool] s64     // 2 elements, indexed by .false and .true
+B :: [bool] s64     // 2 elements, indexed by false and true
 ```
 
 Since most arrays are indexed using integers starting from 0, there is syntactic sugar to support that:
