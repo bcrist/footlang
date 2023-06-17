@@ -1,0 +1,6 @@
+(dep Zig-TempAllocator
+    (module TempAllocator)
+)
+(dir src
+    (exe verdic)
+)

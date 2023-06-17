@@ -1,0 +1,10 @@
+.{
+    .name = "verdi",
+    .version = "0.0.0",
+    .dependencies = .{
+        .@"Zig-TempAllocator" = .{
+            .url = "https://github.com/bcrist/Zig-TempAllocator/archive/c9f955915ada19fc168cb5de1d5be8eff773639e.tar.gz",
+            .hash = "1220079d450ece4a0be68e67c5f4aab3b9b979b57f52ce8c65c8ced858a48e8a818f",
+        },
+    },
+}
