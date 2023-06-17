@@ -1,0 +1,81 @@
+/* Tomorrow Night Eighties Theme */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+.hljs-comment {
+    color: #595;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attribute,
+.hljs-tag,
+.hljs-name,
+.hljs-regexp,
+.hljs-link,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+    color: #a8c6d8;
+}
+
+.hljs-number,
+.hljs-numbers,
+.hljs-meta,
+.hljs-literal {
+    color: #b5cea8;
+}
+
+.hljs-string,
+.hljs-params {
+    color: #ce9178;
+}
+
+
+.hljs-symbol,
+.hljs-bullet {
+    color: #ffcc66;
+}
+
+.hljs-built_in,
+.hljs-builtin-name {
+    color: #DCDCAA;
+}
+
+.hljs-type {
+    color: #4EC9B0;
+}
+
+.hljs-title,
+.hljs-keyword,
+.hljs-section {
+color: #6699cc;
+}
+
+.hljs-selector-tag {
+color: #cc99cc;
+}
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  background: #1b1b1b;
+  color: #d3d3d3;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-addition {
+  color: #22863a;
+  background-color: #082c11;
+}
+
+.hljs-deletion {
+  color: #b31d28;
+  background-color: #4b0e15;
+}

@@ -1,6 +1,6 @@
 # Comments
 In Verdi, anything on a line following a double slash token is ignored:
-```
+```verdi
 // I am a comment
 ```
 This will look very familiar if you have experience with with C++ (or later versions of C) or one of the many languages that take syntax from them.

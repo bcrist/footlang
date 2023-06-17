@@ -7,17 +7,17 @@ Often, this behavior is exactly what we want, but there are cases where we'd rat
 
 # Distinct Types
 Types in Verdi always have structural equivalence.  This applies to all types, including structs and unions.  However, the structure of a type includes its _dimension_.  Types with different dimensions are never equivalent.  Unlike types, dimensions have identity equivalence, so by applying an anonymous dimension to a type, the type then effectively gains identity equivalence as well:
-```
+```verdi
 My_Pair :: struct {
-	a: u32
-	b: u32
+    a: u32
+    b: u32
 } in @dim
 ```
 The `@dim` built-in creates a new dimension, and the `in` operator applies it to the struct we defined just prior.  Since `in @dim` isn't the most intuitive syntax, generally you'd instead use the `distinct` type modifier, which is syntactic sugar that has the same meaning, but operates as a prefix instead:
-```
+```verdi
 My_Pair :: distinct struct {
-	a: u32
-	b: u32
+    a: u32
+    b: u32
 }
 ```
 
@@ -28,7 +28,7 @@ The `@undim` prefix operator takes a type and returns a version of the type with
 
 # Named Dimensions
 Dimensions allow more power than just enforcing identity equivalence.  Dimensions are constants, and can therefore be declared with a name:
-```
+```verdi
 milliseconds :: @dim
 
 fn sleep duration: usize in milliseconds { ... }
@@ -38,20 +38,20 @@ sleep' 1000 in milliseconds // works!
 ```
 
 Dimensions can also be combined to create composite dimensions, using multiplication, division, and exponentiation, and arithmetic on dimensioned numbers automatically creates a result of the proper dimension:
-```
+```verdi
 meter :: @dim
 second :: @dim
 
 my_speed: in meter/second: 0.4 in meter / 0.9 in second
 ```
 Multiplying or dividing a dimension by itself increases or decreases the _rank_ (i.e. exponent) of that dimension.  The rank must be an integer, so exponentiation of dimensioned numbers only works when the exponent is an integer constant.  A dimension can have rank 0, making it effectively unitless, and yet still be present on a type:
-```
+```verdi
 x: u32 in meter^0 = 13 in meter / 2 in meter
 ```
 Technically `distinct` is syntactic sugar for `in @dim^0`, not `in @dim`.  The distinction is only relevant when applied to numeric types though.  `@dim^0` does not change under multiplication or division with itself, but multiplication and division against structs or unions is not possible.
 
 Finally, dimensions can be offset and scaled to support automatic conversions between types:
-```
+```verdi
 km :: 1000 * meter
 mile :: 621.371 * meter
 minute :: 60 * second
@@ -59,7 +59,6 @@ hour :: 60 * minute
 kph :: km/hour
 mph :: mile/hour
 speed_limit_kph : kph : 60 in mph
-
 
 deg_K :: @dim
 deg_C :: deg_K + 273.15

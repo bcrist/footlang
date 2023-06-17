@@ -5,7 +5,7 @@ Tags can be placed on declarations, expressions, and fields.  Multiple tags may 
 
 ## Declaration Tags
 Tags on declarations must appear before the declaration's identifier, on the same line or a previous one:
-```
+```verdi
 #"I'm a tag!" my_tagged_decl :: 1234
 
 #.["this decl has multiple tags"]
@@ -15,22 +15,22 @@ tagged_decl_2 :: 4321
 
 ## Field Tags
 Within a struct or union type definition, tags can also be attached to fields.  As with declaration tags, the tag can appear on a previous line, or the same line before the field symbol literal:
-```
+```verdi
 union {
-	#"tag, you're it"
-	.asdf
-	#1234 .field2: f32
+    #"tag, you're it"
+    .asdf
+    #1234 .field2: f32
 }
 ```
 
 ## Expression Tags
 When used on the same line as an expression, `#` acts as a binary operator with low binding power.  These are all equivalent:
-```
+```verdi
 ((1 + 2) #"tag1") #"tag2"
 (1 + 2) #"tag1" #"tag2"
 1 + 2 #"tag1" #"tag2"
 ```
 Note that applying a tag does not affect the type or value of an expression, so tags can also be nested:
-```
+```verdi
 #("outer tag" #"inner tag")
 ```

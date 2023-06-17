@@ -9,7 +9,7 @@ Custom and non-IEEE-754 floating point types are not supported.
 
 ## Creation from constant range
 The four floating point base types may be prefixed with `@` to create variants with a limited range:
-```
+```verdi
 @f16 0 ~ 1
 @f32 0 ~ 1
 @f64 0 ~ 1
@@ -18,22 +18,22 @@ The four floating point base types may be prefixed with `@` to create variants w
 
 ## Creation from struct literal
 Just like `@fixed`, Instead of a constant range, a struct literal may be used to create a float type variant using `@f16`, `@f32`, etc., as long as the struct matches the definition:
-```
+```verdi
 T: @type: ...
 
 Operators: .all | .offset | .comparison | .identity | .none
 
 struct {
-	.range: @range T
-	.operators: Operators = .all
+    .range: @range T
+    .operators: Operators = .all
 }
 ```
 Additionally, the `@float` operator can be used with the definition:
-```
+```verdi
 struct {
-	.base: T
-	.range: @range T = T.range
-	.operators: Operators = T.operators
+    .base: T
+    .range: @range T = T.range
+    .operators: Operators = T.operators
 }
 ```
 

@@ -1,4 +1,5 @@
 # Operator Precedence
+TODO: Very WIP...
 
 |  | Operator | Description | Associativity |
 |---|---|---|---|

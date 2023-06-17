@@ -12,13 +12,13 @@ A `match` expression is be used to access the original value as one of a specifi
 
 ## Example
 The poster-child for `any` is an equivalent to C's `printf`:
-```
+```verdi
 print :: fn args: []any {
-	// ...
+    // ...
 }
 
 main :: fn {
-	name := "World"
-	print' .["Hello %!  My favorite number is %\n", name, 7 as u8]
+    name := "World"
+    print' .["Hello %!  My favorite number is %\n", name, 7 as u8]
 }
 ```

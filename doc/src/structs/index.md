@@ -5,12 +5,12 @@ Structs always have deterministic layout (field ordering).  Fields are always al
 
 ## Type Literals
 Struct types can contain both fields and declarations.  Declarations are created when a normal identifier is used on the left side of the `::` or `:=` operators.  Fields are created when a symbol literal is used on the left.
-```
+```verdi
 struct {
-	.x: T = default_value
-	.y := 1 as u32
-
-	something := "this is a declaration, not a field"
+    .x: T = default_value
+    .y := 1 as u32
+    
+    something := "this is a declaration, not a field"
 }
 ```
 
@@ -18,21 +18,21 @@ If all fields of a struct have a default value, then then the struct itself is c
 
 ### Anonymous Fields
 Struct fields may be declared without a name.  Such fields are known as _anonymous fields_:
-```
+```verdi
 struct {
-	.: T = default_value
-	.: U
+    .: T = default_value
+    .: U
 }
 ```
 Since anonymous fields can't be accessed by name, they normally would be given unique types so that they can be accessed by type (see [Coercion](#coercion) and [Assignment](#assignment))
 
 ### Type Product Operator
 In type theory, the concept of a struct is sometimes known as a _product type_.  In this vein, Verdi provides the `&` operator, which takes two or more types and wraps them in an anonymous struct.  All fields within this struct will also be anonymous.
-```
+```verdi
 A & B & C == struct {
-	.: A
-	.: B
-	.: C
+    .: A
+    .: B
+    .: C
 }
 ```
 Note that more than two fields can be combined with a chain of `&` operators.  If any of the operands are non-dimensioned structs, they will be flattened and their fields will be appended to the resulting anonymous struct.  Values of dimensioned struct types will be embedded as a single field in the result.
@@ -43,7 +43,7 @@ Coercion, assignment, and partial assignment of structs involve copying fields f
 * `source` is the only field that can be coerced to `D`
 
 ## Assignment
-```
+```verdi
 S :: struct ...
 D :: struct ...
 source : S = ...
@@ -57,7 +57,7 @@ The assignment above is allowed when all of the following hold:
 * Every field in `source` can be copied to at least one field in `dest`
 
 ### With `@narrow`
-```
+```verdi
 dest = @narrow source
 ```
 The assignment above is allowed when all of the following hold: 
@@ -65,7 +65,7 @@ The assignment above is allowed when all of the following hold:
 * Every field in `dest` can be assigned from exactly one field in `source`
 
 ## Partial Assignment
-```
+```verdi
 D :: struct ...
 source : S = ...
 dest : D = ...
@@ -82,7 +82,7 @@ The partial assignment above is allowed when exactly one of the following cases 
 	* Every field in `source` can be assigned to at least one field in `dest`
 
 ### With `@narrow`
-```
+```verdi
 dest .= @narrow source
 ```
 The partial assignment above is allowed when exactly one of the following cases holds:
@@ -94,50 +94,50 @@ The partial assignment above is allowed when exactly one of the following cases 
 	* No field in `dest` can be assigned from multiple fields in `source`
 
 ## Coercion
-```
+```verdi
 D = struct ...
 S = struct ...
 source : S = ...
 dest : D = source
 ```
 The coercion above is allowed as long as the following assignment would be allowed:
-```
+```verdi
 dest2 : mut D = ---
 dest2 = source
 ```
 
 ### With `@narrow`
-```
+```verdi
 dest : D = @narrow source
 ```
 The coercion above is allowed as long as the following assignment would be allowed:
-```
+```verdi
 dest2 : mut D = ---
 dest2 = @narrow source
 ```
 
 ### From non-structs
-```
+```verdi
 D = struct ...
 @require not S is .struct
 source : S = ...
 dest : D = source
 ```
 The coercion above is equivalent to:
-```
+```verdi
 dest : D = .{ source }
 ```
 
 ## Destructuring
 If multiple comma separated values appear on the left side of an assignment, the compiler wraps them in an anonymous struct.  The values may be variable declarations, or variable references.  Destructuring does not support partial assignment, but you can use `@narrow` on the right side.
-```
+```verdi
 main :: fn {
-	a : mut u32 = 0
-	a, x: u8, b: _ = .{
-		.x = 1
-		.a = 123
-		.b = 321 as u32
-	}
+    a : mut u32 = 0
+    a, x: u8, b: _ = .{
+        .x = 1
+        .a = 123
+        .b = 321 as u32
+    }
 }
 ```
 

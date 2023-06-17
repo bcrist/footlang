@@ -2,13 +2,13 @@
 Declarations represent named functions or pieces of data that are associated with a particular scope.  They can be placed in structs, unions, or procedural blocks.  Declarations may be either constants (defined with `::` ) or variables (defined with `:=`).
 
 Here are some examples of declarations:
-```
+```verdi
 mol :: 6.0221408 * 10^23
 
 mol_f32 : f32 : mol
 
 add :: fn a ' b {
-	return a + b
+    return a + b
 }
 
 my_global_data := s32.[ 1, 2, 3 ]
@@ -30,7 +30,7 @@ Sometimes you may want to add spacing inside identifiers to make it more readabl
 ```
 apple\ _pie :: 1
 orange\_pie :: 2
-pecan\\_pie :: 3
+pecan\ _pie :: 3
 pumpkin_pie :: 4
 ```
 Like `_` in numeric literals, these spacers hold no semantic meaning, and don't need to be used in other usages of the same identifier.
@@ -48,7 +48,7 @@ Variables within procedural blocks are lexically scoped; identifiers must be dec
 
 # Types
 In addition to a value and identifier, every declaration in Verdi also has has a type, which determines how the value can be used.  Often the type can be inferred from the initializing value, however it can also be explicitly specified:
-```
+```verdi
 pi : @rational_constant : 3.1415926
 version : [5]u8 : "1.0.0"
 ```

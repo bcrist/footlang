@@ -17,11 +17,11 @@ A function type defines the interface to a function, consisting of:
 * The type of the result
 
 A function type literal looks like:
-```
+```verdi
 fn Left ' Right -> Result
 ```
 If one or more of `Left`, `Right`, and `Result` are `nil`, then they can be omitted:
-```
+```verdi
 fn ' Right -> Result
 fn Left -> Result
 fn -> Result

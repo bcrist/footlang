@@ -8,7 +8,7 @@ Additionally, the type tracks the minimum and maximum values that the type is al
 Any identifier starting with `u` or `s` and followed by a decimal integer N, between 0 and 65535, defines an unsigned or signed integer of N bits. The minimum and maximum values correspond to the normal `[| 0, 2^N |)` or `[| -(2^(N-1)), 2^(N-1) |)` range for binary integers.
 
 Examples:
-```
+```verdi
 u0 // can only represent the value 0
 u1 // 0 or 1
 s8 // any integer in [-128, 127]
@@ -18,44 +18,44 @@ s8 // any integer in [-128, 127]
 A full-range integer literal, followed by `x` and a decimal integer M, between 0 and 65535, defines a full-range fixed-point type, where M is the number of additional fractional bits that exist in the LSBs of the number.  The full width 
 
 Examples:
-```
+```verdi
 u4x4 // 4 integer bits, 4 fractional bits = 8 bits total
 s8x4 // 8 integer bits (including 1 sign bit), 4 fractional bits = 12 bits total
 ```
 
 ## Creation from constant range
 The `@fixed` prefix operator will turn a constant range value into a fixed point type with minimum and maximum values set according to the range:
-```
+```verdi
 @fixed 1~~5
 ```
 If the range's element type is a fixed-point type, then the resulting type is a subset of the same type, just (potentially) with reduced range.  Otherwise, the range's element type must be `@rational_constant` and the bounds must be integers, and it will choose the smallest number of bits necessary to encode any integer in the range.  If it contains no negative values, then it will be unsigned.
 
 ## Creation from struct literal
 The `@fixed` operator can also turn a struct literal into a type.  The literal must match one of these struct definitions:
-```
+```verdi
 T: @type: ...
 
 Operators: .all | .scalar | .offset | .comparison | .identity | .none
 
 struct {
-	.base: @type
-	.range: @range T = T.range
-	.ulp: T.ULP = T.ulp
-	.operators: Operators = T.operators
+    .base: @type
+    .range: @range T = T.range
+    .ulp: T.ULP = T.ulp
+    .operators: Operators = T.operators
 }
 struct {
-	.range: @range T
-	.ulp: T.ULP
-	.operators: Operators = .all
+    .range: @range T
+    .ulp: T.ULP
+    .operators: Operators = .all
 }
 struct {
-	.range: @range T
-	.operators: Operators = .all
+    .range: @range T
+    .operators: Operators = .all
 }
 ```
 
 Examples:
-```
+```verdi
 @fixed .{ u16, 1 ~ 1000 }
 @fixed .{ 1 ~ 1000, 0.25 }
 @fixed .{ u32, .identity }

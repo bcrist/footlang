@@ -3,10 +3,10 @@ Unions are tagged sum types, similar to Zig's `union(enum)` or Rust's `enum` typ
 
 ## Type Literals
 Like struct fields, each field in a union has a name and a type, and the name must be unique within the union.  Unlike struct fields, union fields cannot have default values.
-```
+```verdi
 union {
-	.hello: u8
-	.world: u16
+    .hello: u8
+    .world: u16
 }
 ```
 
@@ -14,16 +14,16 @@ Multiple fields may be placed on the same line if separated by commas.
 
 ### Unit Fields
 A union where all fields have a unit type is effectively equivalent to an enum in languages like C++.  Since this is a frequent use case, the type may be omitted from a union field, which is equivalent to explicitly setting it to `@unit`:
-```
+```verdi
 union { .apple, .orange, .pear }
 ```
 
 ### Anonymous Fields
 Another frequent use case for unions is representing the same kind of object, but represented by different types.  In these cases the name isn't really meaningful, so we can have anonymous fields in unions, just like structs:
-```
+```verdi
 union {
-	.: u16
-	.: * f32
+    .: u16
+    .: * f32
 }
 ```
 
@@ -33,20 +33,20 @@ This can also be used to create function overload sets (since each function has 
 Similar to the `&` operator for wrapping types in a struct, there is a `|` operator which wraps types in a union.  If any of the operands are non-dimensioned unions, they will be flattened and their fields merged with the resulting union.  Dimensioned unions will be embedded as a distinct payload type.
 
 When merging unions, if multiple field definitions are structurally equivalent, only one of the matches will be kept.
-```
+```verdi
 A :: distinct u32
 B :: union {
-	.apple
-	.orange
+    .apple
+    .orange
 }
 C :: B.apple
 D :: distinct union { .asdf }
 
 A | B | C | D == union {
-	.: A
-	.apple: B.apple
-	.orange: B.orange
-	.: D
+    .: A
+    .apple: B.apple
+    .orange: B.orange
+    .: D
 }
 ```
 

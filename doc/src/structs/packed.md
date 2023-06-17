@@ -1,8 +1,8 @@
 # Packed Structs
-```
+```verdi
 packed struct {
-	.x: u5
-	.y: u11
+    .x: u5
+    .y: u11
 }
 ```
 

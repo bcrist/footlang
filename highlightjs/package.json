@@ -1,0 +1,8 @@
+{
+  "name": "highlightjs-verdi",
+  "version": "0.1.0",
+  "description": "highlight.js syntax definition for Verdi",
+  "main": "src/languages/verdi.js",
+  "keywords": ["hljs", "highlight.js", "highlightjs", "verdi", "syntax"],
+  "license": "MIT"
+}
