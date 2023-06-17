@@ -1,0 +1,74 @@
+# Conditionally Bounded Loops
+The `while` keyword allows an optional-typed expression to be evaluated repeatedly, until it becomes non-`nil`, or until a condition expression is no longer `.true`, whichever happens first:
+```
+while condition_expr optional_expr
+```
+`condition_expr` is evaluated before `optional_expr`, and the latter is not evaluated if it evaluates to `.false`.  The `while` expression's value is `nil` in this case.
+If `optional_expr` evaluates to a non-`nil` value, the loop ends immediately. `condition_expr` is not evaluated again.  The `while` expression's value is the value from `optional_expr`.  
+
+## `repeat`
+If you always need to evaluate the loop expression at least once, you can use a `repeat`...`while` loop:
+```
+repeat optional_expr while condition_expr
+```
+This works exactly the same as a regular `while` expression, except the conditional expression is evaluated _after_ the optional expression, instead of before.
+
+## `until`
+The `until` keyword works exactly like `while`, except the condition expression is complemented:
+```
+until condition expr
+// is the same as:
+while not condition expr
+
+repeat expr until condition
+// is the same as:
+repeat expr while not condition
+```
+
+## Interaction with Procedural Blocks
+Unlike C, the `break` keyword in Verdi doesn't interact directly with loops, but since it is the only way for a procedural block to evaluate as non-`nil`, it ends up having the same effect:
+```
+x := while ... {
+	// ...
+	break 1234
+}
+```
+Note that since the `while` expression evaluates to `nil` if the loop ends due to the condition being false, you can use the `else` operator with it, just like `if`:
+```
+x := while ... {
+	if ... break 1234
+} else 2345
+```
+When you want to break out of a loop, but a value doesn't need to be extracted, you can use the built-in unit type `@done` (or any other unit type besides `nil`):
+```
+while ... {
+	if ... break @done
+} else @done
+```
+Note the final `else @done` is required here so that the result of the expression is always `@done` and not `?@done`.  Alternatively the result could be discarded with an underscore assignment:
+```
+_ = while ... {
+	if ... break @done
+}
+```
+Most C-like languages have a `continue` keyword that skips the rest of a loop's block, but does not break out of the loop.  In Verdi this can be accomplished without an extra keyword; instead you just need `break nil`:
+```
+while ... {
+	if ... break nil
+	// processing to skip goes here...
+}
+```
+This might be confusing at first to code readers who are more familiar with C than Verdi, but hopefully the presence of  `nil` is enough to convince most readers that this isn't the same as `break` in C.  We could define `continue` as syntactic sugar for `break nil`, but since `break` can be used outside of a loop, that might then open up the possibility for confusion in those cases.
+
+## Optional Unwrapping
+Like an `if` expression, the condition expression of a `while` expression may be replaced with one or more optional-unwrapping declarations, and these declarations will be visible when evaluating the main expression:
+```
+while a := maybe_a, b := some_func_returning_optional' nil {
+	// ...
+}
+```
+Note that the optional expression(s) will be re-evaluated every loop iteration.  If the unwrapped variables are mutable, and they are changed in the course of the loop, the changes will be overwritten at the start of the next loop.
+
+If an optional is unwrapped with a `mut` type modifier, then its location will overlap with the optional's location, such that any changes to it will affect the original optional.
+
+Optional unwrapping does not work with `repeat` or `until` loops.
