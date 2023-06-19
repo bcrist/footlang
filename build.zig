@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     _ = makeRunStep(b, verdic, "verdic", "Run verdic");
 
     const tests1 = b.addTest(.{
-        .root_source_file = .{ .path = "src/lex.zig"},
+        .root_source_file = .{ .path = "src/Token.zig"},
         .target = target,
         .optimize = mode,
     });

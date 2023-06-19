@@ -95,7 +95,7 @@ function dir_visitor.module (_, _, dir_path)
     }
     while nil ~= parser:property(module_visitor, modules) do end
     parser:require_close()
-    moduless[modules.name] = modules
+    modules[module.name] = module
 end
 
 function dir_visitor.exe (_, _, dir_path)
