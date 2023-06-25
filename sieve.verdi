@@ -1,26 +1,28 @@
 max_prime :: 2^16-1
 data : mut = bool.[false] ** max_prime / 2 + 1
 
-main :: fn {
+main :: {
     try @io.stdout 'write_all' "2\n" // we're only checking odd primes below
     
-    limit := @sqrt max_prime + 1
+    limit := @sqrt' max_prime + 1
     
     with delta: mut u16 = 3  repeat {
         prime: mut = delta
         with i := prime / 2  if not data[i] {
             try @io.stdout 'print' .[ "{}\n", prime ]
             data[i] = true
-        }
-        prime = @narrow prime + delta
+        } else continue
+
+        prime = @narrow' prime + delta
         while prime <= max_prime {
             data[prime / 2] = true
-            prime = @narrow prime + delta
+            prime = @narrow' prime + delta
         }
-        delta = @narrow delta + 2
+
+        delta = @narrow' delta + 2
     } while delta < limit
     
-    for i := limit/2..data.len {
+    for i := limit / 2 ~ data.len {
         if not data[i] {
             try @io.stdout 'print' .[ "{}\n", i * 2 + 1 ]
         }

@@ -1,16 +1,10 @@
 const std = @import("std");
 const Token = @import("Token.zig");
 
-const Expression = @This();
+const Ast = @This();
 
 token_handle: Token.Handle,
 info: Info,
-flags: FlagSet = .{},
-
-pub const FlagSet = std.EnumSet(Flag);
-pub const Flag = enum {
-    asdf
-};
 
 pub const Handle = u31;
 
@@ -20,6 +14,19 @@ pub const Info = union(enum) {
     string_literal,
     id_ref,
     symbol,
+    inferred_type,
+    mut_inferred_type,
+    empty, // used when list would normally be used, in the case where there are no items
+
+    list: Binary,
+
+    constant_declaration: Binary, // identifier : left : right
+    variable_declaration: Binary, // identifier : left = right (`= right` may be omitted, `empty is used instead)
+    field_declaration: Binary,    // symbol : left = right (`= right` may be omitted, `empty` is used instead)
+
+    assignment: Binary, // left = right
+
+    proc_block: Handle, // { ... }
 
     group: Handle, // (x)
     logical_not: Handle, // not x
@@ -29,6 +36,8 @@ pub const Info = union(enum) {
     mut_type: Handle, // mut x
     distinct_type: Handle, // distinct x
     error_type: Handle, // error x
+    defer_expr: Handle, // defer x
+    errordefer_expr: Handle, // errordefer x
     negate: Handle, // -x
     range_expr_infer_start_exclusive_end: Handle, // ~x
     range_expr_infer_start_inclusive_end: Handle, // ~~x
@@ -38,14 +47,22 @@ pub const Info = union(enum) {
     slice_type: Handle, // []x
     range_expr_infer_end: Handle, // x~ or x~~
 
+    if_expr: Binary,
+    while_expr: Binary,
+    until_expr: Binary,
+    repeat_while: Binary,
+    repeat_until: Binary,
+    repeat_infinite: Handle,
+    with_expr: Binary,
+    with_only: Binary,
+    for_expr: Binary,
+
     typed_array_literal: Binary, // left is type, right is contents
     anonymous_array_literal: Handle,
     typed_struct_literal: Binary, // left is type, right is contents
     anonymous_struct_literal: Handle,
     typed_union_literal: Binary, // left is type, right is contents
     anonymous_union_literal: Handle,
-    expr_list: Binary,
-    field_init: Binary, // .xyz = abc
     array_type: Binary, // [left]right
     member_access: Binary, // left.right
     indexed_access: Binary, // left[right]

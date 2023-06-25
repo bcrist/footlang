@@ -33,10 +33,23 @@ pub const Kind = enum (u8) {
     kw_as,
     kw_in,
     kw_is,
-    kw_else,
-    kw_catch,
     kw_and,
     kw_or,
+    kw_else,
+    kw_catch,
+    kw_defer,
+    kw_errordefer,
+    kw_if,
+    kw_with,
+    kw_only,
+    kw_for,
+    kw_while,
+    kw_until,
+    kw_repeat,
+    kw_match,
+    kw_struct,
+    kw_union,
+    kw_fn,
     paren_open,
     paren_close,
     index_open,
@@ -73,6 +86,7 @@ pub const Kind = enum (u8) {
     eql_eql,
     thin_arrow,
     thick_arrow,
+    comma,
 };
 
 pub fn init(data: Data, text: []const u8) Token {
@@ -105,6 +119,7 @@ pub fn init(data: Data, text: []const u8) Token {
         .money,
         .lt,
         .gt,
+        .comma,
             => 1,
 
         .tilde_tilde,
@@ -123,26 +138,40 @@ pub fn init(data: Data, text: []const u8) Token {
         .dot_paren_open,
         .dot_index_open,
         .dot_block_open,
+        .kw_fn,
+        .kw_if
             => 2,
 
         .kw_try,
         .kw_not,
         .kw_mut,
         .kw_and,
+        .kw_for,
         .spaceship,
             => 3,
 
         .kw_else,
+        .kw_with,
+        .kw_only,
             => 4,
 
         .kw_catch,
         .kw_error,
         .kw_break,
+        .kw_while,
+        .kw_until,
+        .kw_defer,
+        .kw_match,
+        .kw_union,
             => 5,
 
-        .kw_return => 6,
-        .kw_distinct => 8,
+        .kw_return,
+        .kw_repeat,
+        .kw_struct,
+            => 6,
 
+        .kw_distinct => 8,
+        .kw_errordefer => 10,
 
         .linespace => blk: {
             var consume_newline = remaining[0] == '\\';
@@ -301,7 +330,9 @@ pub fn lex(allocator: std.mem.Allocator, text: []const u8) List {
                 data.kind = .id;
                 const token = Token.init(data, text);
                 break :blk switch (token.text.len) {
-                    2 => checkKeyword(token.text, "as", .kw_as)
+                    2 => checkKeyword(token.text, "fn", .kw_fn)
+                        orelse checkKeyword(token.text, "if", .kw_if)
+                        orelse checkKeyword(token.text, "as", .kw_as)
                         orelse checkKeyword(token.text, "or", .kw_or)
                         orelse checkKeyword(token.text, "in", .kw_in)
                         orelse checkKeyword(token.text, "is", .kw_is)
@@ -310,16 +341,28 @@ pub fn lex(allocator: std.mem.Allocator, text: []const u8) List {
                         orelse checkKeyword(token.text, "and", .kw_and)
                         orelse checkKeyword(token.text, "mut", .kw_mut)
                         orelse checkKeyword(token.text, "try", .kw_try)
+                        orelse checkKeyword(token.text, "for", .kw_for)
                         orelse .id,
                     4 => checkKeyword(token.text, "else", .kw_else)
+                        orelse checkKeyword(token.text, "with", .kw_with)
+                        orelse checkKeyword(token.text, "only", .kw_only)
                         orelse .id,
                     5 => checkKeyword(token.text, "break", .kw_break)
+                        orelse checkKeyword(token.text, "union", .kw_union)
+                        orelse checkKeyword(token.text, "while", .kw_while)
+                        orelse checkKeyword(token.text, "match", .kw_match)
                         orelse checkKeyword(token.text, "catch", .kw_catch)
                         orelse checkKeyword(token.text, "error", .kw_break)
+                        orelse checkKeyword(token.text, "defer", .kw_defer)
+                        orelse checkKeyword(token.text, "until", .kw_until)
                         orelse .id,
                     6 => checkKeyword(token.text, "return", .kw_return)
+                        orelse checkKeyword(token.text, "struct", .kw_struct)
+                        orelse checkKeyword(token.text, "repeat", .kw_repeat)
                         orelse .id,
                     8 => checkKeyword(token.text, "distinct", .kw_distinct)
+                        orelse .id,
+                    10 => checkKeyword(token.text, "errordefer", .kw_errordefer)
                         orelse .id,
                     else => .id,
                 };
@@ -346,6 +389,7 @@ pub fn lex(allocator: std.mem.Allocator, text: []const u8) List {
             '$' => .money,
             '^' => .caret,
             '\'' => .apostrophe,
+            ',' => .comma,
             '.' => if (text.len > i + 1) switch (text[i + 1]) {
                 '[' => .dot_index_open,
                 '(' => .dot_paren_open,

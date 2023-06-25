@@ -26,7 +26,7 @@ repeat expr while not condition
 ```
 
 ## Interaction with Procedural Blocks
-Unlike C, the `break` keyword in Verdi doesn't interact directly with loops, but since it is the only way for a procedural block to evaluate as non-`nil`, it ends up having the same effect:
+Unlike C, the `break` keyword in Verdi doesn't interact directly with loops, but it ends up having the same effect:
 ```verdi
 x := while ... {
     // ...
@@ -58,7 +58,7 @@ while ... {
     // processing to skip goes here...
 }
 ```
-This might be confusing at first to code readers who are more familiar with C than Verdi, but hopefully the presence of  `nil` is enough to convince most readers that this isn't the same as `break` in C.  We could define `continue` as syntactic sugar for `break nil`, but since `break` can be used outside of a loop, that might then open up the possibility for confusion in those cases.
+Since this isn't very intuitive to readers that aren't familiar with the language, Verdi does provide a `continue` keyword that is exactly equivalent to `break nil`, and it is encouraged to use it where possible.
 
 ## Optional Unwrapping
 Like an `if` expression, the condition expression of a `while` expression may be replaced with one or more optional-unwrapping declarations, and these declarations will be visible when evaluating the main expression:

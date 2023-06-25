@@ -12,4 +12,4 @@ C :: @unit
 
 ## Built-in Unit Types
 The `nil` keyword is a built-in unit type for use with [Optional Types]().
-`@done` is a predefined unit type for use with `break` when exiting a loop without a value.
+`@done` is a predefined unit type for use with `break` when exiting a loop without a value.  It is also returned automatically from procedural blocks in the result expression of an `if`.

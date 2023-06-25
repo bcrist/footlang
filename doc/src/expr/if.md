@@ -12,6 +12,8 @@ result := if condition {
     // ...
 }
 ```
+In this case the procedural block's default value (if nothing is returned via `break`) is `@done` instead of `nil` (which is what it would be for a normal procedural block).
+Explicitly using `break nil` (or something equivalent, like `continue`) will cause the result to be `nil`, so any `else` clause would be triggered.
 
 ## Optional Unwrapping
 An `if` expression can also be used to conditionally evaluate an expression, based on whether or not an optional value is `nil`:

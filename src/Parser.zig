@@ -3,8 +3,7 @@ const console = @import("console");
 const Token = @import("Token.zig");
 const Error = @import("Error.zig");
 const Source = @import("Source.zig");
-const Declaration = @import("Declaration.zig");
-const Expression = @import("Expression.zig");
+const Ast = @import("Ast.zig");
 const Compiler = @import("Compiler");
 
 const Parser = @This();
@@ -17,9 +16,17 @@ source_handle: Source.Handle = 0,
 token_kinds: []Token.Kind = &.{},
 next_token: Token.Handle = 0,
 
-declarations: std.MultiArrayList(Declaration) = .{},
-expressions: std.MultiArrayList(Expression) = .{},
-module_decls: std.ArrayListUnmanaged(Declaration.Handle) = .{},
+ast: std.ArrayListUnmanaged(Ast) = .{},
+module: ?Ast.Handle = null,
+
+expression_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+expression_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+field_init_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+
+const AstMemo = struct {
+    ast_handle: ?Ast.Handle,
+    next_token: Token.Handle,
+};
 
 const SyncError = error{Sync};
 
@@ -31,36 +38,53 @@ pub fn init(gpa: std.mem.Allocator, temp_arena: std.mem.Allocator) Parser {
 }
 
 pub fn deinit(self: *Parser) void {
-    self.module_decls.deinit(self.gpa);
-    self.declarations.deinit(self.gpa);
+    self.field_init_list_memos.deinit(self.gpa);
+    self.expression_list_memos.deinit(self.gpa);
+    self.expression_memos.deinit(self.gpa);
+    self.ast.deinit(self.gpa);
     self.errors.deinit(self.gpa);
 }
 
 pub fn parse(self: *Parser, source_handle: Source.Handle, token_kinds: []Token.Kind) void {
-    std.debug.assert(self.errors.items.len == 0);
-    std.debug.assert(self.declarations.len == 0);
-    std.debug.assert(self.module_decls.items.len == 0);
-
+    self.errors.clearRetainingCapacity();
+    self.ast.clearRetainingCapacity();
+    self.module = null;
+    self.expression_memos.clearRetainingCapacity();
+    self.expression_list_memos.clearRetainingCapacity();
+    self.field_init_list_memos.clearRetainingCapacity();
     self.source_handle = source_handle;
     self.token_kinds = token_kinds;
     self.next_token = 0;
 
     while (!self.tryToken(.eof)) {
-        const maybe_decl = self.tryDeclaration(.{ .allow_field = true }) catch {
+        const decl_start_token = self.next_token;
+        const maybe_decl = self.tryDeclaration() catch {
             self.syncPastToken(.newline);
             continue;
         };
-        if (maybe_decl) |handle| {
-            self.module_decls.append(self.gpa, handle) catch @panic("OOM");
+        if (maybe_decl) |decl_handle| {
+            if (!self.tryNewline()) {
+                self.recordErrorAbs("Failed to parse declaration", self.ast.items[decl_handle].token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected end of line", .{});
+                self.syncPastToken(.newline);
+                continue;
+            }
+
+            if (self.module) |prev| {
+                self.module = self.addBinary(.list, decl_start_token, prev, decl_handle);
+            } else {
+                self.module = decl_handle;
+            }
         } else if (self.tryNewline()) {
             continue;
         } else {
+            self.skipLinespace();
             const first = self.next_token;
             self.syncPastToken(.newline);
             var last = self.backtrackToken(self.next_token, .{});
             if (first + 50 < last) {
                 self.recordErrorAbs("Expected a declaration", first, Error.FlagSet.initOne(.has_continuation));
-                self.recordErrorAbs("End of item", last, Error.FlagSet.initOne(.supplemental));
+                self.recordErrorAbs("End of declaration/assignment/expression", last, Error.FlagSet.initOne(.supplemental));
             } else {
                 self.recordErrorAbsRange("Expected a declaration", .{
                     .first = first,
@@ -71,22 +95,11 @@ pub fn parse(self: *Parser, source_handle: Source.Handle, token_kinds: []Token.K
     }
 }
 
-const TryDeclarationOptions = struct {
-    allow_field: bool = false,
-};
-fn tryDeclaration(self: *Parser, options: TryDeclarationOptions) SyncError!?Declaration.Handle {
-    var flags = Declaration.FlagSet.initEmpty();
-
+fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     const start_token = self.next_token;
 
     self.skipLinespace();
-    const token_handle = self.tryIdentifier() orelse blk: {
-        if (options.allow_field) {
-            if (self.trySymbol()) |token_handle| {
-                flags.insert(.field);
-                break :blk token_handle;
-            }
-        }
+    const token_handle = self.tryIdentifier() orelse self.trySymbol() orelse {
         self.next_token = start_token;
         return null;
     };
@@ -97,87 +110,202 @@ fn tryDeclaration(self: *Parser, options: TryDeclarationOptions) SyncError!?Decl
         return null;
     }
 
-    var type_expr_handle: ?Expression.Handle = null;
+    var ast_kind: Ast.Kind = undefined;
+    var type_expr_handle: Ast.Handle = undefined;
+    var init_expr_handle: Ast.Handle = undefined;
+
+    var has_init = false;
 
     self.skipLinespace();
-    if (self.tryToken(.colon)) {
-        flags.insert(.constant);
-    } else if (self.tryToken(.eql)) {
-        // non-constant
-    } else if (self.tryToken(.kw_mut)) {
-        flags.insert(.mutable);
-
-        self.skipLinespace();
+    if (token_handle > 0 and self.token_kinds[token_handle - 1] == .dot) {
+        ast_kind = .field_declaration;
         if (try self.tryExpression()) |type_expr| {
             type_expr_handle = type_expr;
+        } else {
+            self.recordErrorAbs("Failed to parse field declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected type expression", .{});
+            return error.Sync;
         }
 
         self.skipLinespace();
-        if (self.tryToken(.colon)) {
-            flags.insert(.constant);
-        } else if (self.tryToken(.eql)) {
-            // non-constant
-        } else {
-            self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-            self.recordError("Expected ':' or '=' followed by initializer expression", .{});
-            return error.Sync;
+        if (self.tryToken(.eql)) {
+            has_init = true;
         }
-    } else if (try self.tryExpression()) |type_expr| {
-        type_expr_handle = type_expr;
-
-        self.skipLinespace();
-        if (self.tryToken(.colon)) {
-            flags.insert(.constant);
-        } else if (self.tryToken(.eql)) {
-            // non-constant
-        } else {
-            self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-            self.recordError("Expected ':' or '=' followed by initializer expression", .{});
-            return error.Sync;
-        }
+    } else if (self.tryToken(.colon)) {
+        type_expr_handle = self.addTerminal(.inferred_type, self.next_token - 1);
+        ast_kind = .constant_declaration;
+        has_init = true;
+    } else if (self.tryToken(.eql)) {
+        type_expr_handle = self.addTerminal(.inferred_type, self.next_token - 1);
+        ast_kind = .variable_declaration;
+        has_init = true;
     } else {
-        self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-        self.recordError("Expected ':' or '=' or type expression", .{});
-        return error.Sync;
+        if (try self.tryExpression()) |type_expr| {
+            type_expr_handle = type_expr;
+        } else if (self.tryToken(.kw_mut)) {
+            type_expr_handle = self.addTerminal(.mut_inferred_type, self.next_token - 1);
+        } else {
+            self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected type expression or ':' or '=' followed by initializer expression", .{});
+            return error.Sync;
+        }
+
+        self.skipLinespace();
+        if (self.tryToken(.colon)) {
+            ast_kind = .constant_declaration;
+            has_init = true;
+        } else if (self.tryToken(.eql)) {
+            ast_kind = .variable_declaration;
+            has_init = true;
+        } else {
+            ast_kind = .variable_declaration;
+        }
     }
 
-    self.skipLinespace();
-    const initializer_expr_handle = try self.tryExpression() orelse {
-        self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-        self.recordError("Expected initializer expression", .{});
-        return error.Sync;
-    };
-
-    if (!self.tryNewline()) {
-        self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-        self.recordError("Expected end of line", .{});
-        return error.Sync;
+    if (has_init) {
+        self.skipLinespace();
+        init_expr_handle = try self.tryExpression() orelse {
+            self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected initializer expression", .{});
+            return error.Sync;
+        };
+    } else {
+        init_expr_handle = self.addTerminal(.empty, token_handle);
     }
 
-    const handle = @intCast(Declaration.Handle, self.declarations.len);
-    self.declarations.append(self.gpa, .{
-        .token_handle = token_handle,
-        .type_or_dim_expr_handle = type_expr_handle,
-        .initializer_expr_handle = initializer_expr_handle,
-        .flags = flags,
-    }) catch @panic("OOM");
-
-    return handle;
+    return self.addBinary(ast_kind, token_handle, type_expr_handle, init_expr_handle);
 }
 
-fn tryExpression(self: *Parser) SyncError!?Expression.Handle {
-    // TODO memoize
-    return self.tryExpressionPratt(0);
+fn fieldInitList(self: *Parser) SyncError!Ast.Handle {
+    self.skipWhitespace();
+    const token_handle = self.next_token;
+    if (self.field_init_list_memos.get(token_handle)) |memo| {
+        self.next_token = memo.next_token;
+        return memo.ast_handle.?;
+    }
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        const item_token_handle = self.next_token;
+        const ast_handle = (try self.tryAssignmentOrExpression()) orelse break;
+        if (maybe_list) |list| {
+            maybe_list = self.addBinary(.list, item_token_handle, list, ast_handle);
+        } else {
+            maybe_list = ast_handle;
+        }
+
+        if (self.tryToken(.comma) or self.tryNewline()) {
+            self.skipWhitespace();
+        } else {
+            break;
+        }
+    }
+
+    const list = maybe_list orelse self.addTerminal(.empty, token_handle);
+
+    self.field_init_list_memos.put(self.gpa, token_handle, .{
+        .next_token = self.next_token,
+        .ast_handle = list,
+    }) catch @panic("OOM");
+    return list;
+}
+
+fn expressionList(self: *Parser) SyncError!Ast.Handle {
+    self.skipWhitespace();
+    const token_handle = self.next_token;
+    if (self.expression_list_memos.get(token_handle)) |memo| {
+        self.next_token = memo.next_token;
+        return memo.ast_handle.?;
+    }
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        const item_token_handle = self.next_token;
+        const ast_handle = (try self.tryExpression()) orelse break;
+        if (maybe_list) |list| {
+            maybe_list = self.addBinary(.list, item_token_handle, list, ast_handle);
+        } else {
+            maybe_list = ast_handle;
+        }
+
+        if (self.tryToken(.comma) or self.tryNewline()) {
+            self.skipWhitespace();
+        } else {
+            break;
+        }
+    }
+
+    const list = maybe_list orelse self.addTerminal(.empty, token_handle);
+
+    self.expression_list_memos.put(self.gpa, token_handle, .{
+        .next_token = self.next_token,
+        .ast_handle = list,
+    }) catch @panic("OOM");
+    return list;
+}
+
+fn tryStatement(self: *Parser) SyncError!?Ast.Handle {
+    const begin_token_handle = self.next_token;
+    if (self.tryToken(.kw_defer)) {
+        self.skipLinespace();
+        if (try self.tryExpression()) |expr_handle| {
+            return self.addUnary(.defer_expr, begin_token_handle, expr_handle);
+        } else {
+            self.recordErrorAbs("Failed to parse defer expression", begin_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected expression", .{});
+            return error.Sync;
+        }
+    } else if (self.tryToken(.kw_errordefer)) {
+        self.skipLinespace();
+        if (try self.tryExpression()) |expr_handle| {
+            return self.addUnary(.errordefer_expr, begin_token_handle, expr_handle);
+        } else {
+            self.recordErrorAbs("Failed to parse errordefer expression", begin_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected expression", .{});
+            return error.Sync;
+        }
+    } else return self.tryAssignmentOrExpression();
+}
+
+fn tryAssignmentOrExpression(self: *Parser) SyncError!?Ast.Handle {
+    if (try self.tryExpression()) |lhs_handle| {
+        self.skipLinespace();
+        const assign_token_handle = self.next_token;
+        if (self.tryToken(.eql)) {
+            if (try self.tryExpression()) |rhs_handle| {
+                return self.addBinary(.assignment, assign_token_handle, lhs_handle, rhs_handle);
+            } else {
+                self.recordErrorAbs("Failed to parse assignment", assign_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected expression", .{});
+                return error.Sync;
+            }
+        } else return lhs_handle;
+    } else return null;
+}
+
+fn tryExpression(self: *Parser) SyncError!?Ast.Handle {
+    const token_handle = self.next_token;
+    if (self.expression_memos.get(token_handle)) |memo| {
+        self.next_token = memo.next_token;
+        return memo.ast_handle;
+    }
+    const expr = try self.tryExpressionPratt(0);
+    self.expression_memos.put(self.gpa, token_handle, .{
+        .next_token = self.next_token,
+        .ast_handle = expr,
+    }) catch @panic("OOM");
+    return expr;
 }
 
 const OperatorInfo = struct {
     token: Token.Handle,
 
-    // If used, this should be an expression from tryExpression, not tryExpressionPratt or tryPrimaryExpression
-    // This ensures that if the operator is rejected, the expression won't leak
-    other: ?Expression.Handle,
+    // If used, this should be a memoized node to ensure that if the operator is rejected, it won't leak
+    other: ?Ast.Handle,
 
-    kind: Expression.Kind,
+    kind: Ast.Kind,
+
+    // For prefix operators, this should usually be set to 0xFF.
     left_bp: u8,
 
     // When null, this must be used as a suffix operator, otherwise it can be a binary operator.
@@ -186,9 +314,8 @@ const OperatorInfo = struct {
     // When both right_bp and alt_when_suffix are non-null, this may be either an infix or a suffix operator.
     // When it functions as a suffix, these override the values from the outer struct:
     alt_when_suffix: ?struct {
-        // This must be at least as large as the outer left_bp
         left_bp: u8,
-        kind: Expression.Kind,
+        kind: Ast.Kind,
     },
 };
 fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
@@ -209,72 +336,139 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
         .token = t,
         .other = null,
         .kind = undefined,
-        .left_bp = 0xFF, // this should only be changed if you want to prevent certain nested unary operator combinations
-        .right_bp = base_bp,
+        .left_bp = 0xFF,
+        .right_bp = base_bp + 1,
         .alt_when_suffix = null,
     };
     switch (kind) {
-        .kw_return => {
-            info.right_bp = base_bp - 0x38;
-            info.kind = .return_expr;
+        .kw_if => {
+            info.right_bp = base_bp - 0x3A;
+            info.kind = .if_expr;
+            // TODO handle optional unwrapping lists
+            info.other = (try self.tryExpression()) orelse {
+                self.recordErrorAbs("Failed to parse if expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected condition expression", .{});
+                return error.Sync;
+            };
         },
-        .kw_break => {
-            info.right_bp = base_bp - 0x38;
-            info.kind = .break_expr;
+        .kw_while => {
+            info.right_bp = base_bp - 0x3A;
+            info.kind = .while_expr;
+            // TODO handle optional unwrapping lists
+            info.other = (try self.tryExpression()) orelse {
+                self.recordErrorAbs("Failed to parse while expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected condition expression", .{});
+                return error.Sync;
+            };
+        },
+        .kw_until => {
+            info.right_bp = base_bp - 0x3A;
+            info.kind = .until_expr;
+            info.other = (try self.tryExpression()) orelse {
+                self.recordErrorAbs("Failed to parse until expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected condition expression", .{});
+                return error.Sync;
+            };
+        },
+        .kw_repeat => {
+            info.right_bp = base_bp - 0x3A;
+            if (try self.tryExpression()) |loop_expr_handle| {
+                self.skipLinespace();
+                if (self.tryToken(.kw_while)) {
+                    info.other = loop_expr_handle;
+                    info.kind = .repeat_while;
+                } else if (self.tryToken(.kw_until)) {
+                    info.other = loop_expr_handle;
+                    info.kind = .repeat_until;
+                } else {
+                    info.kind = .repeat_infinite;
+                    self.next_token = t + 1;
+                }
+            } else {
+                self.recordErrorAbs("Failed to parse repeat expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected loop expression", .{});
+                return error.Sync;
+            }
         },
 
-        .kw_try => {
-            info.right_bp = base_bp - 0x30;
-            info.kind = .try_expr;
+        .kw_with => {
+            info.right_bp = base_bp - 0x3A;
+            info.kind = if (self.tryToken(.kw_only)) .with_only else .with_expr;
+            while (true) {
+                self.skipLinespace();
+                const token_handle = self.next_token;
+                const decl_handle = (try self.tryDeclaration()) orelse break;
+                if (info.other) |list| {
+                    info.other = self.addBinary(.list, token_handle, list, decl_handle);
+                } else {
+                    info.other = decl_handle;
+                }
+
+                if (self.tryToken(.comma)) {
+                    self.skipWhitespace();
+                } else {
+                    break;
+                }
+            }
+
+            if (info.other == null) {
+                self.recordErrorAbs("Failed to parse with-scope expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected at least one declaration", .{});
+                return error.Sync;
+            }
         },
 
-        .kw_not => {
-            info.right_bp = base_bp - 0x5;
-            info.kind = .logical_not;
+        .kw_for => {
+            info.right_bp = base_bp - 0x3A;
+            // TODO handle @rev
+            info.kind = .for_expr;
+            while (true) {
+                self.skipLinespace();
+                const token_handle = self.next_token;
+                const decl_handle = (try self.tryDeclaration()) orelse break;
+                if (info.other) |list| {
+                    info.other = self.addBinary(.list, token_handle, list, decl_handle);
+                } else {
+                    info.other = decl_handle;
+                }
+
+                if (self.tryToken(.comma)) {
+                    self.skipWhitespace();
+                } else {
+                    break;
+                }
+            }
+
+            if (info.other == null) {
+                self.recordErrorAbs("Failed to parse for expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected at least one declaration", .{});
+                return error.Sync;
+            }
         },
+
+        .kw_return   => { info.right_bp = base_bp - 0x38; info.kind = .return_expr; },
+        .kw_break    => { info.right_bp = base_bp - 0x38; info.kind = .break_expr; },
+        .kw_try      => { info.right_bp = base_bp - 0x30; info.kind = .try_expr; },
+        .kw_not      => { info.right_bp = base_bp - 0x05; info.kind = .logical_not; },
 
         .kw_mut      => { info.kind = .mut_type; },
         .kw_distinct => { info.kind = .distinct_type; },
         .kw_error    => { info.kind = .error_type; },
 
-        .tilde => {
-            info.right_bp = base_bp + 0x2D;
-            info.kind = .range_expr_infer_start_exclusive_end;
-        },
-        .tilde_tilde => {
-            info.right_bp = base_bp + 0x2D;
-            info.kind = .range_expr_infer_start_inclusive_end;
-        },
+        .tilde       => { info.right_bp = base_bp + 0x2D; info.kind = .range_expr_infer_start_exclusive_end; },
+        .tilde_tilde => { info.right_bp = base_bp + 0x2D; info.kind = .range_expr_infer_start_inclusive_end; },
 
-        .question => {
-            info.right_bp = base_bp + 0x3D;
-            info.kind = .optional_type;
-        },
-        .star => {
-            info.right_bp = base_bp + 0x3D;
-            info.kind = .make_pointer;
-        },
-        .dash => {
-            info.right_bp = base_bp + 0x3D;
-            info.kind = .negate;
-        },
+        .question    => { info.right_bp = base_bp + 0x3D; info.kind = .optional_type; },
+        .star        => { info.right_bp = base_bp + 0x3D; info.kind = .make_pointer; },
+        .dash        => { info.right_bp = base_bp + 0x3D; info.kind = .negate; },
+
         .index_open => {
             info.right_bp = base_bp + 0x3D;
             const index_expr = try self.tryExpression();
+            info.kind = if (index_expr) |_| .array_type else .slice_type;
+            info.other = index_expr;
             self.skipLinespace();
-            if (self.tryToken(.index_close)) {
-                info.kind = if (index_expr) |_| .array_type else .slice_type;
-                info.other = index_expr;
-            } else {
-                const error_token = self.next_token;
-
-                self.recordErrorAbsRange("Failed to parse array/slice type literal prefix", .{
-                    .first = t,
-                    .last = error_token,
-                }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-                self.recordErrorAbs("Expected ']'", error_token, .{});
-                return error.Sync;
-            }
+            try self.closeRegion(t, .index_close, "]", "array/slice type prefix");
         },
 
         else => {
@@ -310,50 +504,25 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
     };
 
     switch (kind) {
-        .octothorpe  => {
-            info.left_bp = left_base - 0x3F;
-            info.right_bp = right_base - 0x3E;
-            info.kind = .apply_tag;
-        },
+        .octothorpe  => { info.left_bp = left_base - 0x3F; info.right_bp = right_base - 0x3E; info.kind = .apply_tag; },
 
-        .bar => {
-            info.left_bp = left_base - 0x13;
-            info.right_bp = right_base - 0x12;
-            info.kind = .type_sum_operator;
-        },
+        .kw_else     => { info.left_bp = left_base - 0x3B; info.right_bp = right_base - 0x3A; info.kind = .coalesce; },
+        .kw_catch    => { info.left_bp = left_base - 0x3B; info.right_bp = right_base - 0x3A; info.kind = .catch_expr; },
 
-        .amp => {
-            info.left_bp = left_base - 0x11;
-            info.right_bp = right_base - 0x10;
-            info.kind = .type_product_operator;
-        },
+        .bar         => { info.left_bp = left_base - 0x13; info.right_bp = right_base - 0x12; info.kind = .type_sum_operator; },
+        .amp         => { info.left_bp = left_base - 0x11; info.right_bp = right_base - 0x10; info.kind = .type_product_operator; },
+        .kw_or       => { info.left_bp = left_base - 0x0A; info.right_bp = right_base - 0x09; info.kind = .logical_or; },
+        .kw_and      => { info.left_bp = left_base - 0x08; info.right_bp = right_base - 0x07; info.kind = .logical_and; },
+        .eql_eql     => { info.left_bp = left_base - 0x04; info.right_bp = right_base - 0x03; info.kind = .test_equal; },
+        .diamond     => { info.left_bp = left_base - 0x04; info.right_bp = right_base - 0x03; info.kind = .test_inequal; },
 
-        .kw_or => {
-            info.left_bp = left_base - 0xA;
-            info.right_bp = right_base - 0x9;
-            info.kind = .logical_or;
-        },
+        .lt          => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_less_than; },
+        .gt          => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_greater_than; },
+        .lt_eql      => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_less_than_or_equal; },
+        .gt_eql      => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_greater_than_or_equal; },
+        .spaceship   => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .compare; },
+        .kw_is       => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_active_field; },
 
-        .kw_and => {
-            info.left_bp = left_base - 0x8;
-            info.right_bp = right_base - 0x7;
-            info.kind = .logical_and;
-        },
-
-        // not = -5
-
-        .eql_eql     => { info.left_bp = left_base - 0x4; info.right_bp = right_base - 0x3; info.kind = .test_equal; },
-        .diamond     => { info.left_bp = left_base - 0x4; info.right_bp = right_base - 0x3; info.kind = .test_inequal; },
-
-        .lt          => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .test_less_than; },
-        .gt          => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .test_greater_than; },
-        .lt_eql      => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .test_less_than_or_equal; },
-        .gt_eql      => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .test_greater_than_or_equal; },
-        .spaceship   => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .compare; },
-        .kw_is       => { info.left_bp = left_base - 0x2; info.right_bp = right_base - 0x1; info.kind = .test_active_field; },
-
-        .kw_else     => { info.kind = .coalesce; },
-        .kw_catch    => { info.kind = .catch_expr; },
         .apostrophe => {
             if (linespace_before == linespace_after) {
                 info.kind = .ambiguous_call;
@@ -364,114 +533,64 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
             }
         },
 
-        .tilde => { 
-            info.left_bp = left_base + 0x20;
-            info.right_bp = right_base + 0x21;
-            info.kind = .range_expr_exclusive_end;
-            info.alt_when_suffix = .{
-                .left_bp = left_base + 0x20,
-                .kind = .range_expr_infer_end,
-            };
+        .tilde               => { info.left_bp = left_base + 0x20; info.right_bp = right_base + 0x21; info.kind = .range_expr_exclusive_end;
+            info.alt_when_suffix = .{ .left_bp = left_base + 0x20,                                        .kind = .range_expr_infer_end };
         },
-        .tilde_tilde => {
-            info.left_bp = left_base + 0x20;
-            info.right_bp = right_base + 0x21;
-            info.kind = .range_expr_inclusive_end;
-            info.alt_when_suffix = .{
-                .left_bp = left_base + 0x20,
-                .kind = .range_expr_infer_end,
-            };
+        .tilde_tilde         => { info.left_bp = left_base + 0x20; info.right_bp = right_base + 0x21; info.kind = .range_expr_inclusive_end;
+            info.alt_when_suffix = .{ .left_bp = left_base + 0x20,                                        .kind = .range_expr_infer_end };
         },
 
-        .kw_as => {
-            info.left_bp = left_base + 0x2E;
-            info.right_bp = right_base + 0x2F;
-            info.kind = .coerce;
-        },
+        .kw_as     => { info.left_bp = left_base + 0x2E; info.right_bp = right_base + 0x2F; info.kind = .coerce; },
+        .kw_in     => { info.left_bp = left_base + 0x31;info.right_bp = right_base + 0x30; info.kind = .apply_dim; },
+        .plus_plus => { info.left_bp = left_base + 0x32; info.right_bp = right_base + 0x33; info.kind = .array_concat; },
+        .star_star => { info.left_bp = left_base + 0x34; info.right_bp = right_base + 0x35; info.kind = .array_repeat; },
+        .plus      => { info.left_bp = left_base + 0x36; info.right_bp = right_base + 0x37; info.kind = .add; },
+        .dash      => { info.left_bp = left_base + 0x36; info.right_bp = right_base + 0x37; info.kind = .subtract; },
 
-        .kw_in => {
-            info.left_bp = left_base + 0x31;
-            info.right_bp = right_base + 0x30;
-            info.kind = .apply_dim;
+        .star                => { info.left_bp = left_base + 0x38; info.right_bp = right_base + 0x39; info.kind = .multiply;
+            info.alt_when_suffix = .{ .left_bp = left_base + 0x3E,                                        .kind = .unmake_pointer };
         },
+        .slash     => { info.left_bp = left_base + 0x38; info.right_bp = right_base + 0x39; info.kind = .divide_exact; },
+        .caret     => { info.left_bp = left_base + 0x3B; info.right_bp = right_base + 0x3A; info.kind = .raise_exponent; },
+        .dot       => { info.left_bp = left_base + 0x3E; info.right_bp = right_base + 0x3F; info.kind = .member_access; },
 
-        .plus_plus => {
-            info.left_bp = left_base + 0x32;
-            info.right_bp = right_base + 0x33;
-            info.kind = .array_concat;
-        },
-
-        .star_star => {
-            info.left_bp = left_base + 0x34;
-            info.right_bp = right_base + 0x35;
-            info.kind = .array_repeat;
-        },
-
-        .plus => {
-            info.left_bp = left_base + 0x36;
-            info.right_bp = right_base + 0x37;
-            info.kind = .add;
-        },
-        .dash => {
-            info.left_bp = left_base + 0x36;
-            info.right_bp = right_base + 0x37;
-            info.kind = .subtract;
-        },
-
-        .star => {
-            info.left_bp = left_base + 0x38;
-            info.right_bp = right_base + 0x39;
-            info.kind = .multiply;
-            info.alt_when_suffix = .{
-                .left_bp = left_base + 0x3E,
-                .kind = .unmake_pointer,
-            };
-        },
-        .slash => {
-            info.left_bp = left_base + 0x38;
-            info.right_bp = right_base + 0x39;
-            info.kind = .divide_exact;
-        },
-
-        .caret => {
-            info.left_bp = left_base + 0x3B;
-            info.right_bp = right_base + 0x3A;
-            info.kind = .raise_exponent;
-        },
-
-        // prefix operators = 0x3C, 0x3D
-
-        // postfix .star
-        .dot => {
+        .dot_block_open => {
             info.left_bp = left_base + 0x3E;
-            info.right_bp = right_base + 0x3F;
-            info.kind = .member_access;
+            info.right_bp = null;
+            info.kind = .typed_struct_literal;
+            info.other = try self.fieldInitList();
+            try self.closeMultiLineRegion(t, .block_close, "}", "struct literal");
+        },
+        .dot_paren_open => {
+            info.left_bp = left_base + 0x3E;
+            info.right_bp = null;
+            info.kind = .typed_union_literal;
+            info.other = try self.fieldInitList();
+            try self.closeMultiLineRegion(t, .paren_close, ")", "union literal");
+        },
+        .dot_index_open => {
+            info.left_bp = left_base + 0x3E;
+            info.right_bp = null;
+            info.kind = .typed_array_literal;
+            info.other = try self.expressionList();
+            try self.closeMultiLineRegion(t, .index_close, "]", "array literal");
         },
         .index_open => {
             if (try self.tryExpression()) |index_expr| {
+                info.left_bp = left_base + 0x3E;
+                info.right_bp = null;
+                info.kind = .indexed_access;
+                info.other = index_expr;
                 self.skipLinespace();
-                if (self.tryToken(.index_close)) {
-                    info.left_bp = left_base + 0x3E;
-                    info.right_bp = null;
-                    info.kind = .indexed_access;
-                    info.other = index_expr;
-                    return info;
-                } else {
-                    const error_token = self.next_token;
-
-                    self.recordErrorAbsRange("Failed to parse index expression", .{
-                        .first = t,
-                        .last = error_token,
-                    }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-                    self.recordErrorAbs("Expected ']'", error_token, .{});
-                    return error.Sync;
-                }
+                try self.closeRegion(t, .index_close, "]", "index expression");
             } else {
                 const error_token = self.next_token;
+                self.syncPastTokenOrLine(.index_close);
+                const end_token = self.backtrackToken(self.next_token, .{});
 
                 self.recordErrorAbsRange("Failed to parse index expression", .{
                     .first = t,
-                    .last = error_token,
+                    .last = end_token,
                 }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
                 self.recordErrorAbs("Expected expression", error_token, .{});
                 return error.Sync;
@@ -486,16 +605,16 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
     return info;
 }
 
-fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Expression.Handle {
+fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Ast.Handle {
     const before_prefix_operator = self.next_token;
 
     var expr = if (try self.tryPrefixOperator()) |operator| e: {
         if (operator.left_bp >= min_binding_power) {
             if (try self.tryExpressionPratt(operator.right_bp.?)) |right| {
                 if (operator.other) |left| {
-                    break :e self.addBinaryExpression(operator.kind, operator.token, left, right);
+                    break :e self.addBinary(operator.kind, operator.token, left, right);
                 } else {
-                    break :e self.addUnaryExpression(operator.kind, operator.token, right);
+                    break :e self.addUnary(operator.kind, operator.token, right);
                 }
             }
         }
@@ -503,8 +622,10 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Expressio
         return null;
     } else (try self.tryPrimaryExpression()) orelse return null;
 
-    var expr_is_suffix_call = false;
+    var is_suffix_call = false;
     while (true) {
+        const expr_is_suffix_call = is_suffix_call;
+        is_suffix_call = false;
         const before_operator = self.next_token;
         if (try self.tryOperator()) |operator| {
             if (operator.left_bp >= min_binding_power) {
@@ -512,35 +633,35 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Expressio
                     std.debug.assert(operator.other == null);
                     if (try self.tryExpressionPratt(binding_power)) |right| {
                         if (operator.kind == .prefix_call and expr_is_suffix_call) {
-                            const suffix_call = self.expressions.items(.info)[expr].suffix_call;
-                            var args_expr = self.addBinaryExpression(.infix_call_args, operator.token, suffix_call.left, right);
+                            const suffix_call = self.ast.items[expr].info.suffix_call;
+                            var args_expr = self.addBinary(.infix_call_args, operator.token, suffix_call.left, right);
 
-                            self.expressions.items(.info)[expr] = .{ .infix_call = .{
+                            self.ast.items[expr].info = .{ .infix_call = .{
                                 .left = suffix_call.right,
                                 .right = args_expr
                             }};
-                            expr_is_suffix_call = false;
                             continue;
                         }
 
-                        std.debug.print("left_bp:{}  right_bp:{}  kind:{s}\n", .{ operator.left_bp, binding_power, @tagName(operator.kind) });
-                        expr = self.addBinaryExpression(operator.kind, operator.token, expr, right);
-                        expr_is_suffix_call = operator.kind == .suffix_call;
+                        expr = self.addBinary(operator.kind, operator.token, expr, right);
+                        is_suffix_call = operator.kind == .suffix_call;
                         continue;
                     } else if (operator.alt_when_suffix) |alt_operator| {
                         if (alt_operator.left_bp >= min_binding_power and try self.tryExpression() == null) {
-                            expr = self.addUnaryExpression(alt_operator.kind, operator.token, expr);
-                            expr_is_suffix_call = false;
+                            expr = self.addUnary(alt_operator.kind, operator.token, expr);
                             continue;
                         }
                     }
                 } else if (operator.other) |right| {
-                    expr = self.addBinaryExpression(operator.kind, operator.token, expr, right);
-                    expr_is_suffix_call = false;
+                    expr = self.addBinary(operator.kind, operator.token, expr, right);
                     continue;
                 } else {
-                    expr = self.addUnaryExpression(operator.kind, operator.token, expr);
-                    expr_is_suffix_call = false;
+                    expr = self.addUnary(operator.kind, operator.token, expr);
+                    continue;
+                }
+            } else if (operator.alt_when_suffix) |alt_operator| {
+                if (alt_operator.left_bp >= min_binding_power and try self.tryExpression() == null) {
+                    expr = self.addUnary(alt_operator.kind, operator.token, expr);
                     continue;
                 }
             }
@@ -552,16 +673,50 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Expressio
     return expr;
 }
 
-fn tryPrimaryExpression(self: *Parser) SyncError!?Expression.Handle {
+fn tryPrimaryExpression(self: *Parser) SyncError!?Ast.Handle {
     const begin = self.next_token;
     self.skipLinespace();
     const token_handle = self.next_token;
     return switch (self.token_kinds[token_handle]) {
-        .id => self.consumeTerminalExpression(.id_ref),
+        .id => self.consumeTerminal(.id_ref),
         .paren_open => try self.parenExpression(),
         .string_literal, .line_string_literal => self.stringLiteral(),
-        .numeric_literal => self.consumeTerminalExpression(.numeric_literal),
-        .dot => if (self.trySymbol()) |symbol_token_handle| self.addTerminalExpression(.symbol, symbol_token_handle) else null,
+        .numeric_literal => self.consumeTerminal(.numeric_literal),
+        .dot => if (self.trySymbol()) |symbol_token_handle| self.addTerminal(.symbol, symbol_token_handle) else null,
+        .block_open => try self.proceduralBlock(),
+        .dot_block_open => {
+            self.next_token += 1;
+            const list = try self.fieldInitList();
+            try self.closeMultiLineRegion(token_handle, .block_close, "}", "struct literal");
+            return self.addUnary(.anonymous_struct_literal, token_handle, list);
+        },
+        .dot_paren_open => {
+            self.next_token += 1;
+            const list = try self.fieldInitList();
+            try self.closeMultiLineRegion(token_handle, .paren_close, ")", "union literal");
+            return self.addUnary(.anonymous_union_literal, token_handle, list);
+        },
+        .dot_index_open => {
+            self.next_token += 1;
+            const list = try self.expressionList();
+            try self.closeMultiLineRegion(token_handle, .index_close, "]", "array literal");
+            return self.addUnary(.anonymous_array_literal, token_handle, list);
+        },
+
+
+        .kw_match => {
+            unreachable;
+        },
+        .kw_struct => {
+            unreachable;
+        },
+        .kw_union => {
+            unreachable;
+        },
+        .kw_fn => {
+            unreachable;
+        },
+
         else => {
             self.next_token = begin;
             return null;
@@ -569,40 +724,62 @@ fn tryPrimaryExpression(self: *Parser) SyncError!?Expression.Handle {
     };
 }
 
-fn parenExpression(self: *Parser) SyncError!?Expression.Handle {
+fn parenExpression(self: *Parser) SyncError!Ast.Handle {
     const expr_begin = self.next_token;
     std.debug.assert(self.token_kinds[expr_begin] == .paren_open);
     self.next_token += 1;
     self.skipLinespace();
-    if (try self.tryExpression()) |expr| {
+    if (try self.tryExpression()) |expr_handle| {
         self.skipLinespace();
-        if (!self.tryToken(.paren_close)) {
-            const error_token = self.next_token;
-
-            self.recordErrorAbsRange("Failed to parse parenthesized expression", .{
-                .first = expr_begin,
-                .last = error_token,
-            }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
-            self.recordErrorAbs("Expected ')'", error_token, .{});
-            return error.Sync;
-        }
-        return self.addUnaryExpression(.group, expr_begin, expr);
+        try self.closeRegion(expr_begin, .paren_close, ")", "parenthesized expression");
+        return self.addUnary(.group, expr_begin, expr_handle);
     }
 
     const error_token = self.next_token;
+    self.syncPastTokenOrLine(.paren_close);
+    const end_token = self.backtrackToken(self.next_token, .{});
 
     self.recordErrorAbsRange("Failed to parse parenthesized expression", .{
         .first = expr_begin,
-        .last = error_token,
+        .last = end_token,
     }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
     self.recordErrorAbs("Expected expression", error_token, .{});
     return error.Sync;
 }
 
-fn stringLiteral(self: *Parser) Expression.Handle {
+fn proceduralBlock(self: *Parser) SyncError!Ast.Handle {
+    const begin_token = self.next_token;
+    std.debug.assert(self.token_kinds[begin_token] == .block_open);
+    self.next_token += 1;
+    self.skipWhitespace();
+
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        const item_token_handle = self.next_token;
+        const ast_handle = (try self.tryDeclaration()) orelse (try self.tryStatement()) orelse break;
+        if (maybe_list) |list| {
+            maybe_list = self.addBinary(.list, item_token_handle, list, ast_handle);
+        } else {
+            maybe_list = ast_handle;
+        }
+
+        if (self.tryToken(.comma) or self.tryNewline()) {
+            self.skipWhitespace();
+        } else {
+            break;
+        }
+    }
+
+    try self.closeMultiLineRegion(begin_token, .block_close, "}", "procedural block");
+    const list = maybe_list orelse self.addTerminal(.empty, begin_token);
+    return self.addUnary(.proc_block, begin_token, list);
+}
+
+fn stringLiteral(self: *Parser) Ast.Handle {
     const literal_token = self.next_token;
     if (self.tryToken(.string_literal)) {
-        return self.addTerminalExpression(.string_literal, literal_token);
+        return self.addTerminal(.string_literal, literal_token);
     } else if (self.tryToken(.line_string_literal)) {
         while (true) {
             const end = self.next_token;
@@ -613,7 +790,7 @@ fn stringLiteral(self: *Parser) Expression.Handle {
             self.next_token = end;
             break;
         }
-        return self.addTerminalExpression(.string_literal, literal_token);
+        return self.addTerminal(.string_literal, literal_token);
     } else unreachable;
 }
 
@@ -633,6 +810,57 @@ fn tryIdentifier(self: *Parser) ?Token.Handle {
         return self.next_token - 1;
     }
     return null;
+}
+
+fn closeRegion(self: *Parser, begin_token: Token.Handle, token_kind: Token.Kind, comptime token_str: []const u8, comptime region_str: []const u8) SyncError!void {
+    self.skipLinespace();
+    if (self.tryToken(token_kind)) {
+        return;
+    }
+
+    const error_token = self.next_token;
+    self.syncPastTokenOrLine(token_kind);
+    const end_token = self.backtrackToken(self.next_token, .{});
+
+    self.recordErrorAbsRange("Failed to parse " ++ region_str, .{
+        .first = begin_token,
+        .last = end_token,
+    }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+    self.recordErrorAbs("Expected '" ++ token_str ++ "'", error_token, .{});
+
+    return error.Sync;
+}
+
+fn closeMultiLineRegion(self: *Parser, begin_token: Token.Handle, token_kind: Token.Kind, comptime token_str: []const u8, comptime region_str: []const u8) SyncError!void {
+    self.skipWhitespace();
+    if (self.tryToken(token_kind)) {
+        return;
+    }
+
+    const error_token = self.next_token;
+    self.syncPastToken(token_kind);
+    const end_token = self.backtrackToken(self.next_token, .{});
+
+    if (begin_token + 50 < error_token) {
+        self.recordErrorAbs("Failed to parse " ++ region_str ++ " starting here", begin_token, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+        self.recordErrorAbs("Expected '" ++ token_str ++ "'", error_token, Error.FlagSet.initOne(.has_continuation));
+        self.recordErrorAbs("End of " ++ region_str, end_token, Error.FlagSet.initOne(.supplemental));
+    } else if (error_token + 50 < end_token) {
+        self.recordErrorAbsRange("Failed to parse " ++ region_str, .{
+            .first = begin_token,
+            .last = error_token,
+        }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+        self.recordErrorAbs("Expected '" ++ token_str ++ "'", error_token, Error.FlagSet.initOne(.has_continuation));
+        self.recordErrorAbs("End of " ++ region_str, end_token, Error.FlagSet.initOne(.supplemental));
+    } else {
+        self.recordErrorAbsRange("Failed to parse " ++ region_str, .{
+            .first = begin_token,
+            .last = end_token,
+        }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+        self.recordErrorAbs("Expected '" ++ token_str ++ "'", error_token, .{});
+    }
+
+    return error.Sync;
 }
 
 fn tryNewline(self: *Parser) bool {
@@ -702,6 +930,28 @@ fn tryToken(self: *Parser, kind: Token.Kind) bool {
     }
 }
 
+fn syncPastTokenOrLine(self: *Parser, kind: Token.Kind) void {
+    while (true) {
+        const found = self.token_kinds[self.next_token];
+        self.next_token += 1;
+        if (found == kind or found == .newline) {
+            return;
+        }
+        switch (found) {
+            .block_open, .dot_block_open => self.syncPastToken(.block_close),
+            .index_open, .dot_index_open => self.syncPastToken(.index_close),
+            .paren_open, .dot_paren_open => self.syncPastToken(.paren_close),
+
+            .eof => {
+                self.next_token -= 1;
+                return;
+            },
+
+            else => {},
+        }
+    }
+}
+
 fn syncPastToken(self: *Parser, kind: Token.Kind) void {
     while (true) {
         const found = self.token_kinds[self.next_token];
@@ -710,24 +960,16 @@ fn syncPastToken(self: *Parser, kind: Token.Kind) void {
             return;
         }
         switch (found) {
-            .block_open => self.syncPastToken(.block_close),
-
-            .kw_not, .kw_try, .kw_mut, .kw_break, .kw_error, .kw_distinct, .kw_return,
-            .dot, .colon, .eql, .dash, .question, .star, .apostrophe, .tilde, .tilde_tilde,
-            .reserved, .linespace, .newline, .id, .comment, .plus, .slash,
-            .line_string_literal, .string_literal, .numeric_literal,
-            .bar, .amp, .octothorpe, .money, .caret,
-            .kw_as, .kw_in, .kw_is, .kw_else,
-            .kw_catch, .kw_and, .kw_or, .index_open, .paren_open,
-            .dot_paren_open, .dot_index_open, .dot_block_open,
-            .thin_arrow, .thick_arrow, .plus_plus, .star_star,
-            .spaceship, .diamond, .lt, .gt, .lt_eql, .gt_eql, .eql_eql,
-            .paren_close, .index_close, .block_close => {},
+            .block_open, .dot_block_open => self.syncPastToken(.block_close),
+            .index_open, .dot_index_open => self.syncPastToken(.index_close),
+            .paren_open, .dot_paren_open => self.syncPastToken(.paren_close),
 
             .eof => {
                 self.next_token -= 1;
                 return;
             },
+
+            else => {},
         }
     }
 }
@@ -767,51 +1009,50 @@ fn backtrackToken(self: *Parser, token_handle: Token.Handle, options: BacktrackO
     return t;
 }
 
-fn consumeTerminalExpression(self: *Parser, kind: Expression.Kind) Expression.Handle {
+fn consumeTerminal(self: *Parser, kind: Ast.Kind) Ast.Handle {
     const token_handle = self.next_token;
     self.next_token += 1;
-    return self.addTerminalExpression(kind, token_handle);
+    return self.addTerminal(kind, token_handle);
 }
 
-fn addTerminalExpression(self: *Parser, kind: Expression.Kind, token_handle: Token.Handle) Expression.Handle {
+fn addTerminal(self: *Parser, kind: Ast.Kind, token_handle: Token.Handle) Ast.Handle {
     @setEvalBranchQuota(10000);
     switch (kind) {
-        inline else => |k| if (std.meta.FieldType(Expression.Info, k) == void) {
-            const info = @unionInit(Expression.Info, @tagName(k), {});
-            return self.addExpressionInfo(token_handle, info);
+        inline else => |k| if (std.meta.FieldType(Ast.Info, k) == void) {
+            const info = @unionInit(Ast.Info, @tagName(k), {});
+            return self.addAst(token_handle, info);
         },
     }
     unreachable;
 }
 
-fn addUnaryExpression(self: *Parser, kind: Expression.Kind, token_handle: Token.Handle, inner: Expression.Handle) Expression.Handle {
+fn addUnary(self: *Parser, kind: Ast.Kind, token_handle: Token.Handle, inner: Ast.Handle) Ast.Handle {
     @setEvalBranchQuota(10000);
     switch (kind) {
-        inline else => |k| if (std.meta.FieldType(Expression.Info, k) == Expression.Handle) {
-            const info = @unionInit(Expression.Info, @tagName(k), inner);
-            return self.addExpressionInfo(token_handle, info);
+        inline else => |k| if (std.meta.FieldType(Ast.Info, k) == Ast.Handle) {
+            const info = @unionInit(Ast.Info, @tagName(k), inner);
+            return self.addAst(token_handle, info);
         },
     }
     unreachable;
 }
 
-fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token_handle: Token.Handle, left: Expression.Handle, right: Expression.Handle) Expression.Handle {
+fn addBinary(self: *Parser, kind: Ast.Kind, token_handle: Token.Handle, left: Ast.Handle, right: Ast.Handle) Ast.Handle {
     @setEvalBranchQuota(10000);
     switch (kind) {
-        inline else => |k| if (std.meta.FieldType(Expression.Info, k) == Expression.Binary) {
-            const info = @unionInit(Expression.Info, @tagName(k), .{ .left = left, .right = right });
-            return self.addExpressionInfo(token_handle, info);
+        inline else => |k| if (std.meta.FieldType(Ast.Info, k) == Ast.Binary) {
+            const info = @unionInit(Ast.Info, @tagName(k), .{ .left = left, .right = right });
+            return self.addAst(token_handle, info);
         },
     }
     unreachable;
 }
 
-fn addExpressionInfo(self: *Parser, token_handle: Token.Handle, info: Expression.Info) Expression.Handle {
-    const handle = @intCast(Expression.Handle, self.expressions.len);
-    self.expressions.append(self.gpa, .{
+fn addAst(self: *Parser, token_handle: Token.Handle, info: Ast.Info) Ast.Handle {
+    const handle = @intCast(Ast.Handle, self.ast.items.len);
+    self.ast.append(self.gpa, .{
         .token_handle = token_handle,
         .info = info,
-        .flags = .{},
     }) catch @panic("OOM");
     return handle;
 }
@@ -850,13 +1091,15 @@ const DumpContext = struct {
 pub fn dump(self: *Parser, ctx: DumpContext, writer: anytype) !void {
     var mut_ctx = ctx;
 
-    for (self.module_decls.items) |decl_handle| {
-        if (mut_ctx.styles.len > 0) {
-            try mut_ctx.styles[mut_ctx.next_style].apply(writer);
-            mut_ctx.next_style = (mut_ctx.next_style + 1) % mut_ctx.styles.len;
-        }
-        try self.dumpDecl(&mut_ctx, writer, "Declaration:", decl_handle, .{}, .{});
-        try writer.writeByte('\n');
+    if (mut_ctx.styles.len > 0) {
+        try mut_ctx.styles[mut_ctx.next_style].apply(writer);
+        mut_ctx.next_style = (mut_ctx.next_style + 1) % mut_ctx.styles.len;
+    }
+
+    if (self.module) |module| {
+        try self.dumpAst(&mut_ctx, writer, "Module:", module, .{}, .{});
+    } else {
+        try writer.writeAll("Module: null\n");
     }
 
     if (mut_ctx.styles.len > 0) {
@@ -874,7 +1117,7 @@ const DumpPrefix = struct {
     }
 };
 
-fn dumpDecl(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8, decl_handle: Declaration.Handle, first: DumpPrefix, extra: DumpPrefix) !void {
+fn dumpAst(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8, ast_handle: Ast.Handle, first: DumpPrefix, extra: DumpPrefix) @TypeOf(writer).Error!void {
     try first.dump(writer);
 
     var style_buf1: [32]u8 = undefined;
@@ -897,139 +1140,124 @@ fn dumpDecl(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8
     try writer.writeAll(label);
     try writer.writeAll(set_style);
 
-    const decl = self.declarations.get(decl_handle);
-    var iter = decl.flags.iterator();
-    while (iter.next()) |flag| {
-        try writer.print(" {s}", .{ @tagName(flag) });
+    const ast = self.ast.items[ast_handle];
+    const tag = @as(Ast.Kind, ast.info);
+    if (label.len > 0) {
+        try writer.writeByte(' ');
     }
+    try writer.print("{s}", .{ @tagName(tag) });
 
-    const token = Token.init(.{
-        .kind = self.token_kinds[decl.token_handle],
-        .offset = ctx.token_offsets[decl.token_handle],
-    }, ctx.source_text);
+    var buf1: [40]u8 = undefined;
+    var buf2: [40]u8 = undefined;
 
-    try writer.print(" '{s}'", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
+    var new_first = DumpPrefix{ .prev = &extra, .prefix = undefined };
+    var new_extra = DumpPrefix{ .prev = &extra, .prefix = undefined };
 
-    try writer.writeAll(reset_style);
-    try writer.writeByte('\n');
-
-    if (decl.type_or_dim_expr_handle) |expr_handle| {
-        var buf1: [40]u8 = undefined;
-        var buf2: [40]u8 = undefined;
-
-        var new_first = DumpPrefix{ .prev = &extra, .prefix = undefined };
-        var new_extra = DumpPrefix{ .prev = &extra, .prefix = undefined };
-
-        new_first.prefix = try std.fmt.bufPrint(&buf1, "{s} *= ", .{ set_style });
-
-        if (decl.initializer_expr_handle != null) {
-            new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s} |  ", .{ set_style });
-        } else {
-            new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s}    ", .{ set_style });
-        }
-
-        try self.dumpExpr(ctx, writer, "Type:", expr_handle, new_first, new_extra);
-    }
-
-    if (decl.initializer_expr_handle) |expr_handle| {
-        var buf1: [40]u8 = undefined;
-        var buf2: [40]u8 = undefined;
-
-        var new_first = DumpPrefix{ .prev = &extra, .prefix = undefined };
-        var new_extra = DumpPrefix{ .prev = &extra, .prefix = undefined };
-
-        new_first.prefix = try std.fmt.bufPrint(&buf1, "{s} *= ", .{ set_style });
-        new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s}    ", .{ set_style });
-
-        try self.dumpExpr(ctx, writer, "Init:", expr_handle, new_first, new_extra);
-    }
-}
-
-fn dumpExpr(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8, decl_handle: Expression.Handle, first: DumpPrefix, extra: DumpPrefix) !void {
-    try first.dump(writer);
-
-    var style_buf1: [32]u8 = undefined;
-    var style_buf2: [32]u8 = undefined;
-
-    var set_style: []const u8 = "";
-    var reset_style: []const u8 = "";
-    if (ctx.styles.len > 0) {
-        var stream1 = std.io.fixedBufferStream(&style_buf1);
-        try ctx.styles[ctx.next_style].apply(stream1.writer());
-        set_style = stream1.getWritten();
-
-        var stream2 = std.io.fixedBufferStream(&style_buf2);
-        try (console.Style{}).apply(stream2.writer());
-        reset_style = stream2.getWritten();
-
-        ctx.next_style = (ctx.next_style + 1) % ctx.styles.len;
-    }
-
-    try writer.writeAll(label);
-    try writer.writeAll(set_style);
-
-    const expr = self.expressions.get(decl_handle);
-    const tag = @as(Expression.Kind, expr.info);
-    try writer.print(" {s}", .{ @tagName(tag) });
-    var iter = expr.flags.iterator();
-    while (iter.next()) |flag| {
-        try writer.print(" {s}", .{ @tagName(flag) });
-    }
+    new_first.prefix = try std.fmt.bufPrint(&buf1, "{s} *= ", .{ set_style });
+    new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s} |  ", .{ set_style });
 
     @setEvalBranchQuota(10000);
     switch (tag) {
+        .list => {
+            try writer.writeAll(reset_style);
+            try writer.writeByte('\n');
+            _ = try self.dumpAstList(ctx, writer, 0, true, ast.info.list, new_first, new_extra);
+        },
+        .id_ref, .symbol, .numeric_literal, .string_literal => {
+            const token = Token.init(.{
+                .kind = self.token_kinds[ast.token_handle],
+                .offset = ctx.token_offsets[ast.token_handle],
+            }, ctx.source_text);
+            try writer.writeByte(' ');
+            if (tag == .symbol) {
+                try writer.writeByte('.');
+            }
+            try writer.print("{s}", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
+            try writer.writeAll(reset_style);
+            try writer.writeByte('\n');
+        },
+        .field_declaration,
+        .variable_declaration,
+        .constant_declaration => {
+            const token = Token.init(.{
+                .kind = self.token_kinds[ast.token_handle],
+                .offset = ctx.token_offsets[ast.token_handle],
+            }, ctx.source_text);
+            try writer.writeByte(' ');
+            if (tag == .field_declaration) {
+                try writer.writeByte('.');
+            }
+            try writer.print("{s}", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
+            try writer.writeAll(reset_style);
+            try writer.writeByte('\n');
+            const bin = switch (ast.info) {
+                .field_declaration, .variable_declaration, .constant_declaration => |bin| bin,
+                else => unreachable,
+            };
+            try self.dumpAst(ctx, writer, "L:", bin.left, new_first, new_extra);
+            buf2[new_extra.prefix.len - 3] = ' ';
+            try self.dumpAst(ctx, writer, "R:", bin.right, new_first, new_extra);
+        },
         inline else => |k| {
-            const F = std.meta.FieldType(Expression.Info, k);
-            if (F == Expression.Handle) {
+            const F = std.meta.FieldType(Ast.Info, k);
+            if (F == Ast.Handle) {
+                buf2[new_extra.prefix.len - 3] = ' ';
+                try self.dumpAst(ctx, writer, " ", @field(ast.info, @tagName(k)), .{}, extra);
+
+            } else if (F == Ast.Binary) {
                 try writer.writeAll(reset_style);
                 try writer.writeByte('\n');
-
-                var buf1: [40]u8 = undefined;
-                var buf2: [40]u8 = undefined;
-
-                var new_first = DumpPrefix{ .prev = &extra, .prefix = undefined };
-                var new_extra = DumpPrefix{ .prev = &extra, .prefix = undefined };
-
-                new_first.prefix = try std.fmt.bufPrint(&buf1, "{s} *= ", .{ set_style });
-                new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s}    ", .{ set_style });
-
-                try self.dumpExpr(ctx, writer, "X:", @field(expr.info, @tagName(k)), new_first, new_extra);
-
-            } else if (F == Expression.Binary) {
-                try writer.writeAll(reset_style);
-                try writer.writeByte('\n');
-
-                var buf1: [40]u8 = undefined;
-                var buf2: [40]u8 = undefined;
-
-                var new_first = DumpPrefix{ .prev = &extra, .prefix = undefined };
-                var new_extra = DumpPrefix{ .prev = &extra, .prefix = undefined };
-
-                new_first.prefix = try std.fmt.bufPrint(&buf1, "{s} *= ", .{ set_style });
-                new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s} |  ", .{ set_style });
-
-
-                const bin = @field(expr.info, @tagName(k));
-                try self.dumpExpr(ctx, writer, "L:", bin.left, new_first, new_extra);
-
-                new_extra.prefix = try std.fmt.bufPrint(&buf2, "{s}    ", .{ set_style });
-                try self.dumpExpr(ctx, writer, "R:", bin.right, new_first, new_extra);
+                const bin = @field(ast.info, @tagName(k));
+                try self.dumpAst(ctx, writer, "L:", bin.left, new_first, new_extra);
+                buf2[new_extra.prefix.len - 3] = ' ';
+                try self.dumpAst(ctx, writer, "R:", bin.right, new_first, new_extra);
 
             } else if (F == void) {
-                if (k == .id_ref) {
-                    const token = Token.init(.{
-                        .kind = self.token_kinds[expr.token_handle],
-                        .offset = ctx.token_offsets[expr.token_handle],
-                    }, ctx.source_text);
-
-                    try writer.print(" '{s}'", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
-                }
-
                 try writer.writeAll(reset_style);
                 try writer.writeByte('\n');
             } else {
                 unreachable;
             }
         },
+    }
+}
+
+fn dumpAstList(self: *Parser, ctx: *DumpContext, writer: anytype, n: usize, is_last: bool, initial_list: Ast.Binary, first: DumpPrefix, extra: DumpPrefix) @TypeOf(writer).Error!usize {
+    var mut_n = n;
+    var list: Ast.Binary = initial_list;
+    while (true) {
+        switch (self.ast.items[list.left].info) {
+            .list => |bin| {
+                mut_n = try self.dumpAstList(ctx, writer, mut_n, false, bin, first, extra);
+            },
+            else => {
+                var label_buf: [20]u8 = undefined;
+                const label = try std.fmt.bufPrint(&label_buf, "{}:", .{ mut_n });
+                try self.dumpAst(ctx, writer, label, list.left, first, extra);
+                mut_n += 1;
+            },
+        }
+
+        switch (self.ast.items[list.right].info) {
+            .list => |bin| {
+                list = bin;
+            },
+            else => {
+                var label_buf: [20]u8 = undefined;
+                const label = try std.fmt.bufPrint(&label_buf, "{}:", .{ mut_n });
+
+                var extra_buf: [40]u8 = undefined;
+                const new_extra_prefix = extra_buf[0..extra.prefix.len];
+                @memcpy(new_extra_prefix, extra.prefix);
+                if (is_last) {
+                    new_extra_prefix[new_extra_prefix.len - 3] = ' ';
+                }
+                var new_extra = DumpPrefix{ .prev = extra.prev, .prefix = new_extra_prefix };
+
+                try self.dumpAst(ctx, writer, label, list.right, first, new_extra);
+                mut_n += 1;
+                return mut_n;
+            },
+        }
     }
 }
