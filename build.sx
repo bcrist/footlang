@@ -1,6 +1,6 @@
-(dep Zig-TempAllocator
-    (module TempAllocator)
-)
+(dep Zig-TempAllocator (module TempAllocator))
+(dep Zig-ConsoleHelper (module console))
 (dir src
-    (exe verdic)
+    (module Compiler)
+    (exe verdi)
 )

@@ -4,30 +4,79 @@ const Token = @This();
 
 offset: u32,
 kind: Kind,
-source: []const u8,
+text: []const u8,
 
 pub const Handle = u32;
 
-const Kind = enum (u8) {
+pub const Range = struct {
+    first: Handle,
+    last: Handle,
+};
+
+pub const Kind = enum (u8) {
     reserved,
     eof,
     linespace,
     newline,
-    id,
     comment,
     line_string_literal,
     string_literal,
     numeric_literal,
+    id,
+    kw_not,
+    kw_try,
+    kw_mut,
+    kw_break,
+    kw_error,
+    kw_return,
+    kw_distinct,
+    kw_as,
+    kw_in,
+    kw_is,
+    kw_else,
+    kw_catch,
+    kw_and,
+    kw_or,
     paren_open,
     paren_close,
     index_open,
     index_close,
     block_open,
     block_close,
+    dot,
+    dot_paren_open,
+    dot_index_open,
+    dot_block_open,
+    colon,
+    eql,
+    dash,
+    tilde,
+    tilde_tilde,
+    question,
+    star,
+    star_star,
+    apostrophe,
+    plus,
+    plus_plus,
+    slash,
+    bar,
+    amp,
+    caret,
+    octothorpe,
+    money,
+    spaceship,
+    diamond,
+    lt,
+    gt,
+    lt_eql,
+    gt_eql,
+    eql_eql,
+    thin_arrow,
+    thick_arrow,
 };
 
-pub fn init(data: TokenData, source: []const u8) Token {
-    var remaining = source[data.offset..];
+pub fn init(data: Data, text: []const u8) Token {
+    var remaining = text[data.offset..];
     var token_len = switch (data.kind) {
         .eof => 0,
 
@@ -39,7 +88,61 @@ pub fn init(data: TokenData, source: []const u8) Token {
         .index_close,
         .block_open,
         .block_close,
+        .dot,
+        .colon,
+        .eql,
+        .dash,
+        .tilde,
+        .question,
+        .star,
+        .apostrophe,
+        .plus,
+        .slash,
+        .bar,
+        .amp,
+        .caret,
+        .octothorpe,
+        .money,
+        .lt,
+        .gt,
             => 1,
+
+        .tilde_tilde,
+        .kw_as,
+        .kw_in,
+        .kw_is,
+        .kw_or,
+        .diamond,
+        .eql_eql,
+        .lt_eql,
+        .gt_eql,
+        .thin_arrow,
+        .thick_arrow,
+        .star_star,
+        .plus_plus,
+        .dot_paren_open,
+        .dot_index_open,
+        .dot_block_open,
+            => 2,
+
+        .kw_try,
+        .kw_not,
+        .kw_mut,
+        .kw_and,
+        .spaceship,
+            => 3,
+
+        .kw_else,
+            => 4,
+
+        .kw_catch,
+        .kw_error,
+        .kw_break,
+            => 5,
+
+        .kw_return => 6,
+        .kw_distinct => 8,
+
 
         .linespace => blk: {
             var consume_newline = remaining[0] == '\\';
@@ -86,7 +189,7 @@ pub fn init(data: TokenData, source: []const u8) Token {
             var end: usize = 1;
             while (end < remaining.len) : (end += 1) {
                 switch (remaining[end]) {
-                    'A'...'Z', 'a'...'z', '0'...'9', '_', '@', 128...255 => {
+                    'A'...'Z', 'a'...'z', '0'...'9', '_', '<', '>', 128...255 => {
                         consume_linespace = false;
                     },
                     '\\' => {
@@ -139,7 +242,7 @@ pub fn init(data: TokenData, source: []const u8) Token {
     return .{
         .offset = data.offset,
         .kind = data.kind,
-        .source = remaining[0..token_len],
+        .text = remaining[0..token_len],
     };
 }
 
@@ -167,11 +270,11 @@ fn getStringLiteralEnd(literal: []const u8) u32 {
     return @intCast(u32, end);
 }
 
-const TokenData = struct {
+pub const Data = struct {
     offset: u32,
     kind: Kind,
 };
-const TokenList = std.MultiArrayList(TokenData);
+pub const List = std.MultiArrayList(Data);
 
 
 fn checkKeyword(haystack: []const u8, kw: []const u8, kind: Kind) ?Kind {
@@ -182,41 +285,47 @@ fn checkKeyword(haystack: []const u8, kw: []const u8, kind: Kind) ?Kind {
     }
 }
 
-pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
-    var tokens = TokenList{};
-    tokens.setCapacity(allocator, source.len / 2 + 100) catch @panic("OOM");
+pub fn lex(allocator: std.mem.Allocator, text: []const u8) List {
+    var tokens = List{};
+    tokens.setCapacity(allocator, text.len / 2 + 100) catch @panic("OOM");
 
     var i: u32 = 0;
-    while (i < source.len) {
-        var data = TokenData {
+    while (i < text.len) {
+        var data = Data {
             .offset = i,
             .kind = undefined,
         };
-        data.kind = switch (source[i]) {
+        data.kind = switch (text[i]) {
             'A'...'Z', '_', '@', 128...255 => .id,
             'a'...'z' => blk: {
                 data.kind = .id;
-                const token = Token.init(data, source);
-                break :blk switch (token.source.len) {
-                    // 'a' => checkKeyword(remaining, "as", .kw_as) orelse .id,
-                    // 'b' => checkKeyword(remaining, "break", .kw_break) orelse .id,
-                    // 'c' => checkKeyword(remaining, "catch", .kw_catch) orelse checkKeyword(remaining, "continue", .kw_continue) orelse .id,
-                    // 'd' => checkKeyword(remaining, "defer", .kw_defer) orelse checkKeyword(remaining, "dimension", .kw_dimension) orelse .id,
-                    // 'e' => checkKeyword(remaining, "else", .kw_else) orelse checkKeyword(remaining, "errdefer", .kw_errdefer) orelse checkKeyword(remaining, "export", .kw_export) orelse checkKeyword(remaining, "exact", .kw_exact) orelse .id,
-                    // 'f' => checkKeyword(remaining, "fn", .kw_fn) orelse checkKeyword(remaining, "for", .kw_for) orelse .id,
-                    // 'i' => checkKeyword(remaining, "if", .kw_if) orelse checkKeyword(remaining, "import", .kw_import) orelse .id,
-                    // 'm' => checkKeyword(remaining, "mut", .kw_mut) orelse checkKeyword(remaining, "match", .kw_match) orelse checkKeyword(remaining, "module", .kw_module) orelse .id,
-                    // 'p' => checkKeyword(remaining, "pub", .kw_pub) orelse checkKeyword(remaining, "packed", .kw_packed) orelse .id,
-                    // 'r' => checkKeyword(remaining, "repeat", .kw_repeat) orelse .id,
-                    // 's' => checkKeyword(remaining, "struct", .kw_struct) orelse checkKeyword(remaining, "strong", .kw_strong) orelse .id,
-                    // 't' => checkKeyword(remaining, "try", .kw_try) orelse .id,
-                    // 'u' => checkKeyword(remaining, "using", .kw_using) orelse checkKeyword(remaining, "until", .kw_until) orelse checkKeyword(remaining, "union", .kw_union) orelse checkKeyword(remaining, "unit", .kw_unit) orelse .id,
-                    // 'w' => checkKeyword(remaining, "while", .kw_while) orelse checkKeyword(remaining, "weak", .kw_weak) orelse .id,
+                const token = Token.init(data, text);
+                break :blk switch (token.text.len) {
+                    2 => checkKeyword(token.text, "as", .kw_as)
+                        orelse checkKeyword(token.text, "or", .kw_or)
+                        orelse checkKeyword(token.text, "in", .kw_in)
+                        orelse checkKeyword(token.text, "is", .kw_is)
+                        orelse .id,
+                    3 => checkKeyword(token.text, "not", .kw_not)
+                        orelse checkKeyword(token.text, "and", .kw_and)
+                        orelse checkKeyword(token.text, "mut", .kw_mut)
+                        orelse checkKeyword(token.text, "try", .kw_try)
+                        orelse .id,
+                    4 => checkKeyword(token.text, "else", .kw_else)
+                        orelse .id,
+                    5 => checkKeyword(token.text, "break", .kw_break)
+                        orelse checkKeyword(token.text, "catch", .kw_catch)
+                        orelse checkKeyword(token.text, "error", .kw_break)
+                        orelse .id,
+                    6 => checkKeyword(token.text, "return", .kw_return)
+                        orelse .id,
+                    8 => checkKeyword(token.text, "distinct", .kw_distinct)
+                        orelse .id,
                     else => .id,
                 };
             },
             0...9, 11...' ', 127 => .linespace,
-            '\\' => if (source.len <= i + 1) .linespace else switch (source[i + 1]) {
+            '\\' => if (text.len <= i + 1) .linespace else switch (text[i + 1]) {
                 '\\' => .line_string_literal,
                 else => .linespace,
             },
@@ -229,16 +338,45 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
             ']' => .index_close,
             '{' => .block_open,
             '}' => .block_close,
-            '/' => if (source.len > i + 1 and source[i + 1] == '/') .comment else .reserved,
+            ':' => .colon,
+            '|' => .bar,
+            '&' => .amp,
+            '?' => .question,
+            '#' => .octothorpe,
+            '$' => .money,
+            '^' => .caret,
+            '\'' => .apostrophe,
+            '.' => if (text.len > i + 1) switch (text[i + 1]) {
+                '[' => .dot_index_open,
+                '(' => .dot_paren_open,
+                '{' => .dot_block_open,
+                else => .dot,
+            } else .dot,
+            '=' => if (text.len > i + 1) switch (text[i + 1]) {
+                '=' => .eql_eql,
+                '>' => .thick_arrow,
+                else => .eql,
+            } else .eql,
+            '<' => if (text.len > i + 1) switch (text[i + 1]) {
+                '>' => .diamond,
+                '=' => if (text.len > i + 2 and text[i + 2] == '>') .spaceship else .lt_eql,
+                else => .lt,
+            } else .lt,
+            '+' => if (text.len > i + 1 and text[i + 1] == '+') .plus_plus else .plus,
+            '*' => if (text.len > i + 1 and text[i + 1] == '*') .star_star else .star,
+            '>' => if (text.len > i + 1 and text[i + 1] == '=') .gt_eql else .gt,
+            '-' => if (text.len > i + 1 and text[i + 1] == '>') .thin_arrow else .dash,
+            '~' => if (text.len > i + 1 and text[i + 1] == '~') .tilde_tilde else .tilde,
+            '/' => if (text.len > i + 1 and text[i + 1] == '/') .comment else .slash,
             else => .reserved,
         };
 
         tokens.append(allocator, data) catch @panic("OOM");
-        i += @intCast(u32, Token.init(data, source).source.len);
+        i += @intCast(u32, Token.init(data, text).text.len);
     }
 
     tokens.append(allocator, .{
-        .offset = @intCast(u32, source.len),
+        .offset = @intCast(u32, text.len),
         .kind = .eof,
     }) catch @panic("OOM");
 
