@@ -11,7 +11,7 @@ The `bool` type is a predefined union that is used in a variety of ways:
 * Operand and result type for logical operators
 * Accepted by [`if`](../expr/if.md) and [`while/until`](../expr/while.md) 
 It is defined as:
-```verdi
+```foot
 bool :: union : u1 {
     0 => .false
     1 => .true
@@ -22,7 +22,7 @@ false :: bool.false
 
 # `cmp`
 The `cmp` type is a predefined union that is the result type for the `<=>` operator; typically used for sorting:
-```verdi
+```foot
 cmp :: union : s2 {
     -1 => .less
     0 => .equal

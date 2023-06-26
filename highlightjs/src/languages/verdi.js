@@ -159,7 +159,7 @@ export default function (hljs) {
     relevance: 0,
   };
 
-  const VERDI_DEFAULT_CONTAINS = [
+  const FOOT_DEFAULT_CONTAINS = [
     LITERALS,
     STRINGS,
     COMMENTS,
@@ -173,9 +173,9 @@ export default function (hljs) {
   ];
 
   return {
-    name: "Verdi",
-    aliases: ["verdi"],
+    name: "Foot",
+    aliases: ["foot"],
     keywords: KEYWORDS,
-    contains: VERDI_DEFAULT_CONTAINS,
+    contains: FOOT_DEFAULT_CONTAINS,
   };
 }

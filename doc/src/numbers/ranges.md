@@ -3,7 +3,7 @@ A range represents a subset of the possible values that a fixed-point type may s
 
 ## Type Literals
 A range type is defined using the `@range` built-in, along with the fixed-point type that can represent each value in the range (and possibly more):
-```verdi
+```foot
 X :: @range s32
 Y :: @range u16x16
 ```
@@ -27,19 +27,19 @@ A range is stored as the minimum and maximum values within the range.
 
 ## Range Literals
 The `~~` operator creates a range from minimum and maximum operands.  If the operands are rational constants, they must be integers, and the type of the range will be as small as possible.
-```verdi
+```foot
 // 0, 1, 2, 3, 4, 5
 0 ~~ 5
 ```
 
 The `~` operator works like `~~`, except the maximum value is one ULP less than the right side:
-```verdi
+```foot
 // 0, 1, 2, 3, 4
 0 ~ 5
 ```
 
 If one side of the the `~` or `~~` operators is omitted, it is inferred based on the minimum/maximum value of `Range.Type`.  Sometimes it may be necessary to wrap such a range literal in parentheses to avoid ambiguity.  Creating a range with the maximum span can be done with:
-```verdi
+```foot
 T :: @fixed ...
 (~~) as @range T
 ```

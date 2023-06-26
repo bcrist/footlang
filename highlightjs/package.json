@@ -1,8 +1,8 @@
 {
-  "name": "highlightjs-verdi",
+  "name": "highlightjs-foot",
   "version": "0.1.0",
-  "description": "highlight.js syntax definition for Verdi",
-  "main": "src/languages/verdi.js",
-  "keywords": ["hljs", "highlight.js", "highlightjs", "verdi", "syntax"],
+  "description": "highlight.js syntax definition for Foot",
+  "main": "src/languages/foot.js",
+  "keywords": ["hljs", "highlight.js", "highlightjs", "foot", "syntax"],
   "license": "MIT"
 }

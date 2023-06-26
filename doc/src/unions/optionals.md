@@ -3,7 +3,7 @@ An optional type is any union type that has at least two fields, and exactly one
 
 Any type can be turned into an optional type with the `?` prefix operator.
 `?T` is syntactic sugar for `nil | T`.  Note that this also means that `??T == ?T`.  If you want a nested optional, it has to be defined like this:
-```verdi
+```foot
 union {
     .: nil
     .: ?T
@@ -14,7 +14,7 @@ If `T` is a pointer or a non-full-range fixed point type, then its payload will 
 
 ## Operations
 The `else` operator can be used to replace nil with a default value:
-```verdi
+```foot
 optional else default_value
 ```
 

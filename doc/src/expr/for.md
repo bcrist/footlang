@@ -1,6 +1,6 @@
 # Iteration Loops
 The `for` keyword allows an expression to be evaluated once for each item in an array, slice, or range, or each field in a struct or union type.  The name used to refer to each value is set up using a variable declaration, and that name is visible in the scope of the expression that appears after it:
-```verdi
+```foot
 // iterate an array:
 a :: u32.[ 1, 2, 3, 4 ]
 for x := a {
@@ -28,7 +28,7 @@ for info := S {
 
 ## Mutable Array/Slice Access
 When iterating over an array or slice, the declarations in a `for` loop have the same location as the actual data in the array/slice, so if you declare it to be mutable, you can change the data within the original array/slice:
-```verdi
+```foot
 mutable_array : [4] mut u32 = ---
 for x : mut = mutable_array {
     x = 1
@@ -41,7 +41,7 @@ for x : mut = mutable_array {
 Note in the above example, if `mutable_array` had been defined as `[4] u32` then attempting to capture the element value into a mutable declaration would be a compile error.
 
 If you really wanted a mutable local copy, capture it immutably, then assign it to a second mutable variable:
-```verdi
+```foot
 for x := mutable_array {
     mutable_copy : mut = x
 }
@@ -50,7 +50,7 @@ When iterating over ranges or type fields, declarations may be marked `mut`, but
 
 ## Reverse Iteration
 A `for`'s iterable declaration may be prefixed with `@rev` to iterate it in reverse order:
-```verdi
+```foot
 for @rev x := 0 ~ 10 {
     // 9, 8, 7, ... 0
 }
@@ -58,7 +58,7 @@ for @rev x := 0 ~ 10 {
 
 ## Multiple Sequences
 A `for` expression can iterate over multiple sequences simultaneously.  The sequences must have the same length, and a runtime check is generated in safe builds to ensure this.  Some sequences may be iterated in reverse order while others may be iterated in the forward direction:
-```verdi
+```foot
 for x := 0 ~, @rev y := 1 ~~ 10 {
     // x     y
     // 0     10
@@ -75,7 +75,7 @@ Like `repeat`/`while`/`until` loops, a `for` loop will stop as soon as it's main
 
 ## Destructuring
 Like normal assignment statements, destructuring may be used to extract multiple parts when the element type being iterated is a struct.  One example where this can be useful is when iterating over the fields in a type:
-```verdi
+```foot
 S :: struct {
     .a: u32,
     .b: u32,

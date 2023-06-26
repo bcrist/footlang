@@ -22,16 +22,16 @@ pub fn build(b: *std.Build) void {
 
     const TempAllocator = dep__Zig_TempAllocator.module("TempAllocator");
 
-    const verdi = b.addExecutable(.{
-        .name = "verdi",
-        .root_source_file = .{ .path = "src/verdi.zig" },
+    const foot = b.addExecutable(.{
+        .name = "foot",
+        .root_source_file = .{ .path = "src/foot.zig" },
         .target = target,
         .optimize = mode,
     });
-    verdi.addModule("Compiler", Compiler);
-    verdi.addModule("console", console);
-    b.installArtifact(verdi);
-    _ = makeRunStep(b, verdi, "verdi", "Run verdi");
+    foot.addModule("Compiler", Compiler);
+    foot.addModule("console", console);
+    b.installArtifact(foot);
+    _ = makeRunStep(b, foot, "foot", "Run foot");
 
     const tests1 = b.addTest(.{
         .root_source_file = .{ .path = "src/Token.zig"},

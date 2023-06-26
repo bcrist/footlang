@@ -482,7 +482,7 @@ hljs.registerLanguage("zig", () => {
 });
 
 
-hljs.registerLanguage("verdi", () => {
+hljs.registerLanguage("foot", () => {
   "use strict";
 
   const LITERALS = {
@@ -644,7 +644,7 @@ hljs.registerLanguage("verdi", () => {
     relevance: 0,
   };
 
-  const VERDI_DEFAULT_CONTAINS = [
+  const FOOT_DEFAULT_CONTAINS = [
     LITERALS,
     STRINGS,
     COMMENTS,
@@ -658,10 +658,10 @@ hljs.registerLanguage("verdi", () => {
   ];
 
   return {
-    name: "Verdi",
-    aliases: ["verdi"],
+    name: "Foot",
+    aliases: ["foot"],
     keywords: KEYWORDS,
-    contains: VERDI_DEFAULT_CONTAINS,
+    contains: FOOT_DEFAULT_CONTAINS,
   };
 
 });

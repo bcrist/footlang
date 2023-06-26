@@ -5,15 +5,15 @@ There are several definitions of "constant" that are often conflated in programm
 * A value that cannot change after it has been initialized
 * An immutable view of a (usually non-constant) value
 
-In Verdi, "constant" only refers to the first meaning.  This roughly corresponds to Zig's `comptime` or C++'s `constexpr`, but in Verdi, compile-time evaluation is intentionally very limited.  Instead, Verdi programs should rely on the language's runtime introspection to process and generates code as necessary at build-time.
+In Foot, "constant" only refers to the first meaning.  This roughly corresponds to Zig's `comptime` or C++'s `constexpr`, but in Foot, compile-time evaluation is intentionally very limited.  Instead, Foot programs should rely on the language's runtime introspection to process and generates code as necessary at build-time.
 
 Constants can be declared with the `::` operator, which associates an identifier with a constant:
-```verdi
+```foot
 pi :: 3.1415926
 version :: "1.0.0"
 ```
 Basic operations on constants typically result in a new constant:
-```verdi
+```foot
 life :: 10
 the_universe :: life * 3
 everything :: 2

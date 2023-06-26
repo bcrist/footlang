@@ -3,20 +3,20 @@ Symbols are similar to normal identifiers, in that they both refer to named thin
 
 ## Literals
 Symbol literals always start with a `.`:
-```verdi
+```foot
 .hellorld
 .true
 .asdf_123
 ```
 
 Just like regular identifiers, symbols with arbitrary names may be constructed from string literals:
-```verdi
+```foot
 .@"Don't Do This\r\nPlease!"
 ```
 
 ## Constants and Identity
 Symbols may be assigned to constants, and may be compared with each other for equality.  The symbol name may be extracted as a constant string.
-```verdi
+```foot
 symbol :: .asdf
 symbol_name: []u8: *@nameof symbol
 
@@ -30,7 +30,7 @@ No other types can be coerced to `@symbol`, so once a symbol has been coerced to
 
 ## Declarations within types
 One common use case for symbols is to reference declarations within a type:
-```verdi
+```foot
 A :: distinct s32 {
     some_special_value :: 0xDEADBEEF as A
 }
@@ -42,7 +42,7 @@ something: A: A.some_special_value
 
 ## Struct and union fields
 If a symbol's name matches a field name it resolves to that field's type.  For structs this is rarely useful, since the types of struct fields are rarely related to the struct type itself.  But for unions, this can be very useful:
-```verdi
+```foot
 U :: union {
     .abc
     .def: s32
@@ -57,7 +57,7 @@ y2: U = .def.{0} // same as s32.{0}
 
 ## Function calls
 When a function is called using a normal identifier, the types of both operands will be searched for overloads, as well as the current scope, but the type of the result will not normally be searched.  If the function call uses a symbol instead of an identifier, then the outward-in inferred result type will be searched for overloads, and _only_ that type will be searched.  For example:
-```verdi
+```foot
 S :: struct {
     .a: s32,
     .b: s32,
@@ -77,7 +77,7 @@ error := 123 '.init' 456
 
 ## Coercion to `@type`
 If a symbol is coerced to `@type`, it becomes a union type with one `@unit` field of the same name.  For example the following declarations are equivalent:
-```verdi
+```foot
 A: @type: .hello
 B :: union { .hello }
 C :: union { .hello: @unit }
@@ -85,7 +85,7 @@ C :: union { .hello: @unit }
 
 ## Coercion with `as`
 If an expression is coerced using the `as` operator, and a symbol appears as the right hand side, it will look for a matching declaration using outward-in type inference, and if that fails, then inward-out inference.  For example:
-```verdi
+```foot
 T :: distinct u8 {
     X :: u64
 }

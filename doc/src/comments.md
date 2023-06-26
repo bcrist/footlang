@@ -1,12 +1,12 @@
 # Comments
-In Verdi, anything on a line following a double slash token is ignored:
-```verdi
+In Foot, anything on a line following a double slash token is ignored:
+```foot
 // I am a comment
 ```
 This will look very familiar if you have experience with with C++ (or later versions of C) or one of the many languages that take syntax from them.
 
 ## Aside: No multi-line comments?
-In Verdi, there are no multi-line comments _a la_ C's `/* ... */`.  You may wonder why not, given that there are some advantages to having them:
+In Foot, there are no multi-line comments _a la_ C's `/* ... */`.  You may wonder why not, given that there are some advantages to having them:
 
 * You can comment out many lines at once without adding many characters.
 * You can add comments internally within a line.
@@ -27,4 +27,4 @@ On top of only having a few advantages, having multi-line comments creates a sur
 * Lexing cannot be done correctly starting from any arbitrary line, and in most cases the editor will have to scan from the beginning of the file instead of the first visible line.  For very large files, this may slow down some editors.
 * When using an editor without syntax highlighting, the programmer has to do a lot of work to know for sure whether what they're seeing has been commented out or not.
 
-Therefore, Verdi chooses the simplest option of using only line comments.
+Therefore, Foot chooses the simplest option of using only line comments.

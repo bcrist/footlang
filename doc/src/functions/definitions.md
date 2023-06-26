@@ -1,6 +1,6 @@
 # Function Definitions
 A function definition looks a lot like a function type literal, but the `Left` and `Right` types are replaced with variable declarations, and a procedural block is placed at the end:
-```verdi
+```foot
 my_func :: fn left: Left ' right: Right -> Result {
     // ...
 }
@@ -10,7 +10,7 @@ Note that there is no initializer for `left` or `right`; the variable always get
 If one or both parameters are not used, the variable name can be replaced with `_`.  Otherwise the compiler will report the unused variable as an error.
 
 When the function type can be inferred (e.g. when declaring an inline function to pass to another function) the `Left` and `Right` types may be omitted:
-```verdi
+```foot
 meta_func :: fn _: (fn i32) {}
 
 main :: fn {
@@ -22,13 +22,13 @@ main :: fn {
 
 ## Struct Parameters
 If more than two parameters are needed, one or both sides may use an anonymous struct type:
-```verdi
+```foot
 my_func :: fn left: Left ' right: struct { .a: s32, .b: s32 } -> Result {
     // ...
 }
 ```
 This syntax can be shortened by simply defining multiple variables:
-```verdi
+```foot
 my_func :: fn left: Left ' a: s32, b: s32 -> Result {
     // ...
 }
@@ -37,7 +37,7 @@ This has exactly the same type as the previous function definition, but in addit
 
 ## Result Type Inference
 If the `Result` type is not specified, instead of being assumed to be `nil`, it is inferred based on the things that may be returned by the procedural block:
-```verdi
+```foot
 my_func :: fn {
     return 0 as s32
 }
@@ -46,7 +46,7 @@ my_func :: fn {
 
 ## Expression Functions
 Functions containing a single return statement can be shortened by using `=>` followed by the return expression, instead of a procedural block:
-```verdi
+```foot
 X :: struct {
     .value: i32
 }

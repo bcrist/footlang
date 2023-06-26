@@ -1,5 +1,5 @@
 .{
-    .name = "verdi",
+    .name = "footlang",
     .version = "0.0.0",
     .dependencies = .{
         .@"Zig-TempAllocator" = .{

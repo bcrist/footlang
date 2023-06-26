@@ -2,7 +2,7 @@
 Declarations represent named functions or pieces of data that are associated with a particular scope.  They can be placed in structs, unions, or procedural blocks.  Declarations may be either constants (defined with `::` ) or variables (defined with `:=`).
 
 Here are some examples of declarations:
-```verdi
+```foot
 mol :: 6.0221408 * 10^23
 
 mol_f32 : f32 : mol
@@ -47,8 +47,8 @@ Declarations are only "visible" within the scope where they are defined.  Some s
 Variables within procedural blocks are lexically scoped; identifiers must be declared before being referenced.  Constant declarations, and variable declarations within struct and union scopes, are order-independent; identifiers can be used before they are declared.
 
 # Types
-In addition to a value and identifier, every declaration in Verdi also has has a type, which determines how the value can be used.  Often the type can be inferred from the initializing value, however it can also be explicitly specified:
-```verdi
+In addition to a value and identifier, every declaration in Foot also has has a type, which determines how the value can be used.  Often the type can be inferred from the initializing value, however it can also be explicitly specified:
+```foot
 pi : @rational_constant : 3.1415926
 version : [5]u8 : "1.0.0"
 ```
@@ -56,4 +56,4 @@ version : [5]u8 : "1.0.0"
 # Aside: No Semicolons?
 In C, declarations must end with a semicolon.  This helps clear up some ambiguous situations that arise due to treating all whitespace the same (including newlines).
 
-Verdi does not require a sigil (semicolon or otherwise) to separate declarations.  Instead, if the end of a line is reached, and the current declaration being parsed could be ended there, then it is.  Newlines can be escaped with a backslash before the end of the line.  Linespace or comments may appear after the backslash, but any semantic tokens will cancel the effect of the escape.
+Foot does not require a sigil (semicolon or otherwise) to separate declarations.  Instead, if the end of a line is reached, and the current declaration being parsed could be ended there, then it is.  Newlines can be escaped with a backslash before the end of the line.  Linespace or comments may appear after the backslash, but any semantic tokens will cancel the effect of the escape.

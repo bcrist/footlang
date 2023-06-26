@@ -12,7 +12,7 @@ A `match` expression is be used to access the original value as one of a specifi
 
 ## Example
 The poster-child for `any` is an equivalent to C's `printf`:
-```verdi
+```foot
 print :: fn args: []any {
     // ...
 }

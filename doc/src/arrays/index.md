@@ -3,13 +3,13 @@ An array is a constant number of homogeneous values (i.e. having the same type),
 
 ## Array Types
 The `[ ... ]` prefix operator turns an element type into an array type.  The type of the index is placed within the brackets, and the type of the element is placed on the right.
-```verdi
+```foot
 A :: [u4] u32       // 16 elements, indexed 0-15
 B :: [bool] s64     // 2 elements, indexed by false and true
 ```
 
 Since most arrays are indexed using integers starting from 0, there is syntactic sugar to support that:
-```verdi
+```foot
 X :: [3]u32 // equivalent to [@fixed 0~3]u32
 ```
 
@@ -19,7 +19,7 @@ The `mut` type modifier can be placed either before the `[]` or after; they both
 Elements are laid out according to the natural ordering of their index type.  For example, if we have an array  `a : [s4]s32` then `a[-8]` is the first element and `a[7]` is the last.
 
 Arrays can be nested, where the element type of the "outer" array is itself an array:
-```verdi
+```foot
 c : [u1][u1][s2]u8 = ---
 // total of 16 elements, laid out in order:
 // c[0][0][-2]
@@ -43,11 +43,11 @@ c : [u1][u1][s2]u8 = ---
 
 ## Array Literals
 The `.[]` operator creates an array value when applied to a type:
-```verdi
+```foot
 u32.[ 0, 1, 2 ]
 ```
 By default, the index type is `@fixed 0 ~ n` where `n` is the number of values provided, however this can be changed if the inferred type's index type is different.  In fact, the element type may omitted when it can be inferred from context as well:
-```verdi
+```foot
 .[ 2, 3, 4 ] as [3]u32
 ```
 

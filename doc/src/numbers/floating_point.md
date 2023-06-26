@@ -1,5 +1,5 @@
 # Floating-Point Numbers
-Verdi supports four IEEE-754 binary floating point types:
+Foot supports four IEEE-754 binary floating point types:
 * `f16`
 * `f32`
 * `f64`
@@ -9,7 +9,7 @@ Custom and non-IEEE-754 floating point types are not supported.
 
 ## Creation from constant range
 The four floating point base types may be prefixed with `@` to create variants with a limited range:
-```verdi
+```foot
 @f16 0 ~ 1
 @f32 0 ~ 1
 @f64 0 ~ 1
@@ -18,7 +18,7 @@ The four floating point base types may be prefixed with `@` to create variants w
 
 ## Creation from struct literal
 Just like `@fixed`, Instead of a constant range, a struct literal may be used to create a float type variant using `@f16`, `@f32`, etc., as long as the struct matches the definition:
-```verdi
+```foot
 T: @type: ...
 
 Operators: .all | .offset | .comparison | .identity | .none
@@ -29,7 +29,7 @@ struct {
 }
 ```
 Additionally, the `@float` operator can be used with the definition:
-```verdi
+```foot
 struct {
     .base: T
     .range: @range T = T.range

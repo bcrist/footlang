@@ -1,1 +1,1 @@
-# The Verdi Programming Language
+# The Foot Programming Language

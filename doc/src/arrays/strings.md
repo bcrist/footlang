@@ -1,12 +1,12 @@
 # String Literals
 
 String literals are syntactic sugar for [array literals](./index.md#array-literals), where the element type has a size of at least 8 bits.  String literals are usually surrounded by double quotes:
- ```verdi
+ ```foot
 "Hellorld!"
 ``` 
 
 Only printable ASCII characters, excluding the double quote, are allowed within the quotes.  This means the set of allowable octets are: 32 (space), 33 (`!`), and 35 (`#`) through 126 (`~`).  Octet 92 (`\`) is reserved for escape sequences:
-```verdi
+```foot
 "\t" // 9; escaped tab
 "\n" // 10; escaped line feed
 "\r" // 13; escaped carriage return
@@ -22,7 +22,7 @@ The `\"` and `\\` escapes are supported due to their ubiquity in other languages
 * Editors and IDEs with automatic insertion of matching quotes are less likely to do the wrong thing while you type.
 
 A backslash preceding an opening parenthesis encodes zero or more octets:
-```verdi
+```foot
 "\()"               // escaped empty string
 "\(       )"        // escaped empty string
 "\(0)"              // 0; escaped nul
@@ -70,7 +70,7 @@ Any following bytes are copied directly into the string constant unmodified, unt
 If the next line begins with a double backslash (after any optional linespace characters) then it continues the same literal.  A single `\n` is used to separate lines regardless of what separator is used in the source code.
 The string constant does not end with `\n` unless the last line is empty after the double backslash:
 
-```verdi
+```foot
 \\This is all
 \\the same
     \\string constant!

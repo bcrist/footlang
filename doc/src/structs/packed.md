@@ -1,5 +1,5 @@
 # Packed Structs
-```verdi
+```foot
 packed struct {
     .x: u5
     .y: u11

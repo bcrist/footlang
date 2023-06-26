@@ -1,13 +1,13 @@
 # Code Examples
 ## Hellorld!
-```verdi
+```foot
 main :: fn {
     try @io.stdout 'write_all' "Hellorld!"
 }
 ```
 
 ## Fibonacci Sequence
-```verdi
+```foot
 fibonacci :: fn n: u8 {
     prev : mut u64 = 0
     cur : mut u64 = 1
@@ -29,7 +29,7 @@ slow_fibonacci :: fn n: u8 -> u64 {
 ```
 
 ## Sieve of Eratosthenes
-```verdi
+```foot
 max_prime :: 2^16-1
 data : [max_prime / 2 + 1] mut bool
 

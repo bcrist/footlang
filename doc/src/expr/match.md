@@ -1,6 +1,6 @@
 # Match Expressions
 A `match` expression contains a list of _prongs_.  Each prong consists of a list of conditions where it matches and a result expression to evaluate in that case.
-```verdi
+```foot
 match query_expr {
     match_condition_list1 => expression1
     match_condition_list2 => expression2
@@ -12,7 +12,7 @@ Instead of new lines, prongs may be separated by commas, but the list of prongs 
 
 ## Fixed-Point
 When the query expression's type is a fixed-point number, the match conditions may be constants that can be coerced to that type or subranges of that type's range, or `_`, which will match any value not matched by another prong:
-```verdi
+```foot
 x : u32 = ...
 y := match x {
     0, 20~30 => 1234
@@ -24,7 +24,7 @@ Every value in the query type's range must be represented in exactly one prong. 
 
 ## Union
 When the query expression's type is a union, the match conditions may be symbols, types, dimensions, constants or ranges that correspond to field IDs, or `_`:
-```verdi
+```foot
 x : union { ... } = ...
 y := match x {
     .asdf => expr1
@@ -37,7 +37,7 @@ Each union field ID must match exactly one prong.  When specifying a type, it mu
 
 ### Payload Access
 Often the inner match expressions will want to access the payload data stored in the union for the matched field:
-```verdi
+```foot
 match x {
     val := .asdf => expr1
     val : mut = .abc => expr2
@@ -52,7 +52,7 @@ If the initializer is omitted, any field whose type can be coerced to the declar
 If the payload declaration is `mut`, any changes to it will be reflected in the original union value.
 
 Struct destructuring may be used to access fields of a payload struct:
-```verdi
+```foot
 match x {
     a:_, b:_ => expr_using_a_and_b
     _ => default_expr
@@ -61,7 +61,7 @@ match x {
 
 ## `any` Values
 When the query expression's type is `any`, the match conditions must be types, dimensions, or `_`.  Payload access works exactly like for unions.
-```verdi
+```foot
 match x {
     u32 => expr1
     val := u16 => expr2 //
