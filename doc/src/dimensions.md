@@ -24,7 +24,7 @@ My_Pair :: distinct struct {
 Only distinct types may contain declarations.
 
 ## Dimension Removal
-The `@undim` prefix operator takes a type and returns a version of the type without any dimension applied.  It can also take a value of a dimensioned type and return the same value with no dimension.
+The `@undim` suffix operator takes a type and returns a version of the type without any dimension applied.  It can also take a value of a dimensioned type and return the same value with no dimension.
 
 # Named Dimensions
 Dimensions allow more power than just enforcing identity equivalence.  Dimensions are constants, and can therefore be declared with a name:

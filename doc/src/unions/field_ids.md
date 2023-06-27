@@ -15,7 +15,7 @@ union: u8 { .a, .b, .c }
 
 If there are unused IDs in the union's ID type, the union may be marked incomplete:
 ```foot
-@incomplete union: u8 { .a, .b, .c }
+incomplete union: u8 { .a, .b, .c }
 ```
 The compiler will ensure that any [match](../expr/match.md) contains a `_` prong to handle these extra encodings.  Non-incomplete unions will always have an implicit [unreachable](builtin.md#unreachable-and-noreturn) prong for `_`.
 

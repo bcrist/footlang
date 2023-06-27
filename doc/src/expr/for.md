@@ -49,9 +49,9 @@ for x := mutable_array {
 When iterating over ranges or type fields, declarations may be marked `mut`, but they will work like normal variable declarations and will receive their own unique location.
 
 ## Reverse Iteration
-A `for`'s iterable declaration may be prefixed with `@rev` to iterate it in reverse order:
+A `for`'s iterable declaration may be prefixed with `<<` to iterate it in reverse order:
 ```foot
-for @rev x := 0 ~ 10 {
+for << x := 0 ~ 10 {
     // 9, 8, 7, ... 0
 }
 ```
@@ -59,7 +59,7 @@ for @rev x := 0 ~ 10 {
 ## Multiple Sequences
 A `for` expression can iterate over multiple sequences simultaneously.  The sequences must have the same length, and a runtime check is generated in safe builds to ensure this.  Some sequences may be iterated in reverse order while others may be iterated in the forward direction:
 ```foot
-for x := 0 ~, @rev y := 1 ~~ 10 {
+for x := 0 ~, << y := 1 ~~ 10 {
     // x     y
     // 0     10
     // 1     9

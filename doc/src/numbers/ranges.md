@@ -17,8 +17,8 @@ Y :: @range u16x16
 * `r.end`: Equivalent to `r.last + r.Type.ulp`
 * `r[x]`: Equivalent to `(r.first + x) as r.Type`
 * `r1[r2]`: Equivalent to `(r1.first + r2.first) ~~ (r1.first + r2.last)`, where the result's `last` is not greater than `r1.last`.
-* `r.contains' x`: Bounds checking
 * `for x := r ...`: Iteration
+* `r 'contains' x`: Bounds checking
 * `x 'expand' y`: Expand to contain another range or fixed point value
 * `x 'intersect' y`: Contract to the intersection of two ranges
 

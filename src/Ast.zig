@@ -56,6 +56,8 @@ pub const Info = union(enum) {
     with_expr: Binary,
     with_only: Binary,
     for_expr: Binary,
+    match_expr: Binary, // left is expression, right is list of match_prongs
+    match_prong: Binary,
 
     typed_array_literal: Binary, // left is type, right is contents
     anonymous_array_literal: Handle,

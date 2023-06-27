@@ -1,9 +1,9 @@
 _*
 doc/book
 doc/theme/fonts
-.obsidian
 
 **/zig-cache/
 **/zig-out/
 
+**/.obsidian
 **/.vscode/
