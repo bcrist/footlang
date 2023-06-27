@@ -3,7 +3,13 @@ The `with` keyword allows one or more declarations to be added to a new scope, a
 ```foot
 with x := something, y := something_else expression
 ```
-This can be useful to avoid excessive indentation or pollution of the enclosing scope when used with `repeat`/`while`/`until` or `if` expressions:
+Usually `with` is used in conjunction with another control flow expression, like `if`, to avoid excessive indentation or polluting the enclosing block:
+```foot
+with x := whatever if x == something {
+    do_something' x
+}
+```
+Or a loop:
 ```foot
 with x := whatever repeat {
     // ...
@@ -22,4 +28,4 @@ with only a := x {
 ```
 
 ## Mutability and Location
-Declarations in a `with` expression always act like normal declarations within a procedural block; If you declare a mutable variable, changes to its value will not affect the value of the original expression used to initialize it. 
+Declarations in a `with` expression always act like normal declarations within a procedural block; If you declare a mutable variable, changes to its value will not affect the original value used to initialize it.

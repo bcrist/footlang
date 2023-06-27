@@ -6,23 +6,23 @@ The type of the `if` expression is the peer type resolution of the second expres
 expr_when_true: T = ...
 result : ?T = if condition expr_when_true
 ```
-Often the second expression will be a procedural block, leading to something that looks more like an if statement in C-like languages:
+
+## Interaction with Procedural Blocks
+Often the target of an `if` expression will be a procedural block, leading to something that looks more like an if statement in C-like languages:
 ```foot
-result := if condition {
+if condition {
     // ...
 }
 ```
-
-## Interaction with Procedural Blocks
-Consider the ubiquitous `if...else` loop familiar to all C-like languages:
+This works just like you would expect; if the condition evaluates to false, the entire procedural block is not executed.  But now let's consider the ubiquitous `if...else` loop familiar to almost all C-derrived languages:
 ```foot
 if condition { 
-    do_the_thing' with_something
+    // ...
 } else {
-    
+    // ...
 }
 ```
-In Foot, the result of a procedural block is `nil` when no `break` expression is executed.  But `else` in Foot is the nil-coalescing operator, which means in this case the `else` clause would be executed regardless of whether the condition was true.  That's both unintuitive and unhelpful, so Foot makes a special case for procedural blocks that occur as the target of an `if` expression: they behave as if they ended with `break @done`.  This makes `if ... else` (and `if ... else if ... else`, etc.) behave just like someone familiar with C would expect.
+In Foot, the result of a procedural block is `nil` when no `break` expression is executed within it, and `else` is the nil-coalescing operator, which means in this case the `else` clause would be executed regardless of whether the condition was true.  That's both unintuitive and unhelpful, so Foot makes a special case for procedural blocks that occur as the target of an `if` expression: they behave as if they ended with `break @done`.  Since `@done` is not `nil`, this makes `if ... else` (and `if ... else if ... else`, etc.) behave just like someone familiar with C would expect.
 
 Explicitly using `break nil` (or something equivalent, like `continue`) will still cause the result of a procedural `if` block to be `nil`, so any `else` clause would be executed.
 
