@@ -12,8 +12,19 @@ result := if condition {
     // ...
 }
 ```
-In this case the procedural block's default value (if nothing is returned via `break`) is `@done` instead of `nil` (which is what it would be for a normal procedural block).
-Explicitly using `break nil` (or something equivalent, like `continue`) will cause the result to be `nil`, so any `else` clause would be triggered.
+
+## Interaction with Procedural Blocks
+Consider the ubiquitous `if...else` loop familiar to all C-like languages:
+```foot
+if condition { 
+    do_the_thing' with_something
+} else {
+    
+}
+```
+In Foot, the result of a procedural block is `nil` when no `break` expression is executed.  But `else` in Foot is the nil-coalescing operator, which means in this case the `else` clause would be executed regardless of whether the condition was true.  That's both unintuitive and unhelpful, so Foot makes a special case for procedural blocks that occur as the target of an `if` expression: they behave as if they ended with `break @done`.  This makes `if ... else` (and `if ... else if ... else`, etc.) behave just like someone familiar with C would expect.
+
+Explicitly using `break nil` (or something equivalent, like `continue`) will still cause the result of a procedural `if` block to be `nil`, so any `else` clause would be executed.
 
 ## Optional Unwrapping
 An `if` expression can also be used to conditionally evaluate an expression, based on whether or not an optional value is `nil`:
