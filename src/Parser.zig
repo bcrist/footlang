@@ -19,9 +19,14 @@ next_token: Token.Handle = 0,
 ast: std.ArrayListUnmanaged(Ast) = .{},
 module: ?Ast.Handle = null,
 
-expression_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+expression_memos: std.AutoHashMapUnmanaged(ExpressionMemoKey, AstMemo) = .{},
 expression_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
 field_init_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+
+const ExpressionMemoKey = struct {
+    token_handle: Token.Handle,
+    options: ExpressionOptions,
+};
 
 const AstMemo = struct {
     ast_handle: ?Ast.Handle,
@@ -119,7 +124,7 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     self.skipLinespace();
     if (token_handle > 0 and self.token_kinds[token_handle - 1] == .dot) {
         ast_kind = .field_declaration;
-        if (try self.tryExpression()) |type_expr| {
+        if (try self.tryExpression(.{})) |type_expr| {
             type_expr_handle = type_expr;
         } else {
             self.recordErrorAbs("Failed to parse field declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
@@ -140,7 +145,7 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
         ast_kind = .variable_declaration;
         has_init = true;
     } else {
-        if (try self.tryExpression()) |type_expr| {
+        if (try self.tryExpression(.{})) |type_expr| {
             type_expr_handle = type_expr;
         } else if (self.tryToken(.kw_mut)) {
             type_expr_handle = self.addTerminal(.mut_inferred_type, self.next_token - 1);
@@ -164,7 +169,7 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
 
     if (has_init) {
         self.skipLinespace();
-        init_expr_handle = try self.tryExpression() orelse {
+        init_expr_handle = try self.tryExpression(.{}) orelse {
             self.recordErrorAbs("Failed to parse declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
             self.recordError("Expected initializer expression", .{});
             return error.Sync;
@@ -221,7 +226,7 @@ fn expressionList(self: *Parser) SyncError!Ast.Handle {
 
     while (true) {
         const item_token_handle = self.next_token;
-        const ast_handle = (try self.tryExpression()) orelse break;
+        const ast_handle = (try self.tryExpression(.{})) orelse break;
         if (maybe_list) |list| {
             maybe_list = self.addBinary(.list, item_token_handle, list, ast_handle);
         } else {
@@ -248,7 +253,7 @@ fn tryStatement(self: *Parser) SyncError!?Ast.Handle {
     const begin_token_handle = self.next_token;
     if (self.tryToken(.kw_defer)) {
         self.skipLinespace();
-        if (try self.tryExpression()) |expr_handle| {
+        if (try self.tryExpression(.{})) |expr_handle| {
             return self.addUnary(.defer_expr, begin_token_handle, expr_handle);
         } else {
             self.recordErrorAbs("Failed to parse defer expression", begin_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
@@ -257,7 +262,7 @@ fn tryStatement(self: *Parser) SyncError!?Ast.Handle {
         }
     } else if (self.tryToken(.kw_errordefer)) {
         self.skipLinespace();
-        if (try self.tryExpression()) |expr_handle| {
+        if (try self.tryExpression(.{})) |expr_handle| {
             return self.addUnary(.errordefer_expr, begin_token_handle, expr_handle);
         } else {
             self.recordErrorAbs("Failed to parse errordefer expression", begin_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
@@ -268,11 +273,11 @@ fn tryStatement(self: *Parser) SyncError!?Ast.Handle {
 }
 
 fn tryAssignmentOrExpression(self: *Parser) SyncError!?Ast.Handle {
-    if (try self.tryExpression()) |lhs_handle| {
+    if (try self.tryExpression(.{})) |lhs_handle| {
         self.skipLinespace();
         const assign_token_handle = self.next_token;
         if (self.tryToken(.eql)) {
-            if (try self.tryExpression()) |rhs_handle| {
+            if (try self.tryExpression(.{})) |rhs_handle| {
                 return self.addBinary(.assignment, assign_token_handle, lhs_handle, rhs_handle);
             } else {
                 self.recordErrorAbs("Failed to parse assignment", assign_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
@@ -283,14 +288,20 @@ fn tryAssignmentOrExpression(self: *Parser) SyncError!?Ast.Handle {
     } else return null;
 }
 
-fn tryExpression(self: *Parser) SyncError!?Ast.Handle {
-    const token_handle = self.next_token;
-    if (self.expression_memos.get(token_handle)) |memo| {
+const ExpressionOptions = struct {
+    allow_calls: bool = true,
+};
+fn tryExpression(self: *Parser, options: ExpressionOptions) SyncError!?Ast.Handle {
+    const key = ExpressionMemoKey{
+        .token_handle = self.next_token,
+        .options = options,
+    };
+    if (self.expression_memos.get(key)) |memo| {
         self.next_token = memo.next_token;
         return memo.ast_handle;
     }
-    const expr = try self.tryExpressionPratt(0);
-    self.expression_memos.put(self.gpa, token_handle, .{
+    const expr = try self.tryExpressionPratt(0, options);
+    self.expression_memos.put(self.gpa, key, .{
         .next_token = self.next_token,
         .ast_handle = expr,
     }) catch @panic("OOM");
@@ -318,7 +329,7 @@ const OperatorInfo = struct {
         kind: Ast.Kind,
     },
 };
-fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
+fn tryPrefixOperator(self: *Parser, options: ExpressionOptions) SyncError!?OperatorInfo {
     const begin = self.next_token;
     self.skipLinespace();
     const t = self.next_token;
@@ -345,7 +356,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
             info.right_bp = base_bp - 0x3A;
             info.kind = .if_expr;
             // TODO handle optional unwrapping lists
-            info.other = (try self.tryExpression()) orelse {
+            info.other = (try self.tryExpression(options)) orelse {
                 self.recordErrorAbs("Failed to parse if expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
                 self.recordError("Expected condition expression", .{});
                 return error.Sync;
@@ -355,7 +366,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
             info.right_bp = base_bp - 0x3A;
             info.kind = .while_expr;
             // TODO handle optional unwrapping lists
-            info.other = (try self.tryExpression()) orelse {
+            info.other = (try self.tryExpression(options)) orelse {
                 self.recordErrorAbs("Failed to parse while expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
                 self.recordError("Expected condition expression", .{});
                 return error.Sync;
@@ -364,7 +375,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
         .kw_until => {
             info.right_bp = base_bp - 0x3A;
             info.kind = .until_expr;
-            info.other = (try self.tryExpression()) orelse {
+            info.other = (try self.tryExpression(options)) orelse {
                 self.recordErrorAbs("Failed to parse until expression", t, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
                 self.recordError("Expected condition expression", .{});
                 return error.Sync;
@@ -372,7 +383,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
         },
         .kw_repeat => {
             info.right_bp = base_bp - 0x3A;
-            if (try self.tryExpression()) |loop_expr_handle| {
+            if (try self.tryExpression(options)) |loop_expr_handle| {
                 self.skipLinespace();
                 if (self.tryToken(.kw_while)) {
                     info.other = loop_expr_handle;
@@ -464,7 +475,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
 
         .index_open => {
             info.right_bp = base_bp + 0x3D;
-            const index_expr = try self.tryExpression();
+            const index_expr = try self.tryExpression(.{});
             info.kind = if (index_expr) |_| .array_type else .slice_type;
             info.other = index_expr;
             self.skipLinespace();
@@ -478,7 +489,7 @@ fn tryPrefixOperator(self: *Parser) SyncError!?OperatorInfo {
     }
     return info;
 }
-fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
+fn tryOperator(self: *Parser, options: ExpressionOptions) SyncError!?OperatorInfo {
     const begin = self.next_token;
     const linespace_before = self.tryLinespace();
     const t = self.next_token;
@@ -524,6 +535,11 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
         .kw_is       => { info.left_bp = left_base - 0x02; info.right_bp = right_base - 0x01; info.kind = .test_active_field; },
 
         .apostrophe => {
+            if (!options.allow_calls) {
+                self.next_token = begin;
+                return null;
+            }
+
             if (linespace_before == linespace_after) {
                 info.kind = .ambiguous_call;
             } else if (linespace_before) {
@@ -576,7 +592,7 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
             try self.closeMultiLineRegion(t, .index_close, "]", "array literal");
         },
         .index_open => {
-            if (try self.tryExpression()) |index_expr| {
+            if (try self.tryExpression(.{})) |index_expr| {
                 info.left_bp = left_base + 0x3E;
                 info.right_bp = null;
                 info.kind = .indexed_access;
@@ -605,12 +621,12 @@ fn tryOperator(self: *Parser) SyncError!?OperatorInfo {
     return info;
 }
 
-fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Ast.Handle {
+fn tryExpressionPratt(self: *Parser, min_binding_power: u8, options: ExpressionOptions) SyncError!?Ast.Handle {
     const before_prefix_operator = self.next_token;
 
-    var expr = if (try self.tryPrefixOperator()) |operator| e: {
+    var expr = if (try self.tryPrefixOperator(options)) |operator| e: {
         if (operator.left_bp >= min_binding_power) {
-            if (try self.tryExpressionPratt(operator.right_bp.?)) |right| {
+            if (try self.tryExpressionPratt(operator.right_bp.?, options)) |right| {
                 if (operator.other) |left| {
                     break :e self.addBinary(operator.kind, operator.token, left, right);
                 } else {
@@ -627,11 +643,11 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Ast.Handl
         const expr_is_suffix_call = is_suffix_call;
         is_suffix_call = false;
         const before_operator = self.next_token;
-        if (try self.tryOperator()) |operator| {
+        if (try self.tryOperator(options)) |operator| {
             if (operator.left_bp >= min_binding_power) {
                 if (operator.right_bp) |binding_power| {
                     std.debug.assert(operator.other == null);
-                    if (try self.tryExpressionPratt(binding_power)) |right| {
+                    if (try self.tryExpressionPratt(binding_power, options)) |right| {
                         if (operator.kind == .prefix_call and expr_is_suffix_call) {
                             const suffix_call = self.ast.items[expr].info.suffix_call;
                             var args_expr = self.addBinary(.infix_call_args, operator.token, suffix_call.left, right);
@@ -647,7 +663,7 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Ast.Handl
                         is_suffix_call = operator.kind == .suffix_call;
                         continue;
                     } else if (operator.alt_when_suffix) |alt_operator| {
-                        if (alt_operator.left_bp >= min_binding_power and try self.tryExpression() == null) {
+                        if (alt_operator.left_bp >= min_binding_power and try self.tryExpression(options) == null) {
                             expr = self.addUnary(alt_operator.kind, operator.token, expr);
                             continue;
                         }
@@ -660,7 +676,7 @@ fn tryExpressionPratt(self: *Parser, min_binding_power: u8) SyncError!?Ast.Handl
                     continue;
                 }
             } else if (operator.alt_when_suffix) |alt_operator| {
-                if (alt_operator.left_bp >= min_binding_power and try self.tryExpression() == null) {
+                if (alt_operator.left_bp >= min_binding_power and try self.tryExpression(options) == null) {
                     expr = self.addUnary(alt_operator.kind, operator.token, expr);
                     continue;
                 }
@@ -702,6 +718,7 @@ fn tryPrimaryExpression(self: *Parser) SyncError!?Ast.Handle {
             try self.closeMultiLineRegion(token_handle, .index_close, "]", "array literal");
             return self.addUnary(.anonymous_array_literal, token_handle, list);
         },
+        .kw_fn => try self.tryFunctionType(),
 
 
         .kw_match => {
@@ -711,9 +728,6 @@ fn tryPrimaryExpression(self: *Parser) SyncError!?Ast.Handle {
             unreachable;
         },
         .kw_union => {
-            unreachable;
-        },
-        .kw_fn => {
             unreachable;
         },
 
@@ -729,7 +743,7 @@ fn parenExpression(self: *Parser) SyncError!Ast.Handle {
     std.debug.assert(self.token_kinds[expr_begin] == .paren_open);
     self.next_token += 1;
     self.skipLinespace();
-    if (try self.tryExpression()) |expr_handle| {
+    if (try self.tryExpression(.{})) |expr_handle| {
         self.skipLinespace();
         try self.closeRegion(expr_begin, .paren_close, ")", "parenthesized expression");
         return self.addUnary(.group, expr_begin, expr_handle);
@@ -774,6 +788,73 @@ fn proceduralBlock(self: *Parser) SyncError!Ast.Handle {
     try self.closeMultiLineRegion(begin_token, .block_close, "}", "procedural block");
     const list = maybe_list orelse self.addTerminal(.empty, begin_token);
     return self.addUnary(.proc_block, begin_token, list);
+}
+
+fn tryFunctionType(self: *Parser) SyncError!?Ast.Handle {
+    self.skipLinespace();
+    const fn_begin = self.next_token;
+    if (!self.tryToken(.kw_fn)) return null;
+    self.skipLinespace();
+
+    var maybe_left: ?Ast.Handle = null;
+    var maybe_right: ?Ast.Handle = null;
+
+    if (self.tryToken(.apostrophe)) {
+        self.skipLinespace();
+        if (try self.tryExpression(.{ .allow_calls = false })) |expr_handle| {
+            maybe_right = expr_handle;
+        } else {
+            const error_token = self.next_token;
+            self.recordErrorAbsRange("Failed to parse function type", .{
+                .first = fn_begin,
+                .last = error_token,
+            }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordErrorAbs("Expected type expression", error_token, .{});
+            return error.Sync;
+        }
+    } else {
+        maybe_left = try self.tryExpression(.{ .allow_calls = false });
+
+        self.skipLinespace();
+        if (self.tryToken(.apostrophe)) {
+            self.skipLinespace();
+            if (try self.tryExpression(.{ .allow_calls = false })) |expr_handle| {
+                maybe_right = expr_handle;
+            } else {
+                const error_token = self.next_token;
+                self.recordErrorAbsRange("Failed to parse function type", .{
+                    .first = fn_begin,
+                    .last = error_token,
+                }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordErrorAbs("Expected type expression", error_token, .{});
+                return error.Sync;
+            }
+        }
+    }
+
+    var maybe_result: ?Ast.Handle = null;
+
+    self.skipLinespace();
+    if (self.tryToken(.thin_arrow)) {
+        self.skipLinespace();
+        if (try self.tryExpression(.{ .allow_calls = false })) |expr_handle| {
+            maybe_result = expr_handle;
+        } else {
+            const error_token = self.next_token;
+            self.recordErrorAbsRange("Failed to parse function type", .{
+                .first = fn_begin,
+                .last = error_token,
+            }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordErrorAbs("Expected type expression", error_token, .{});
+            return error.Sync;
+        }
+    }
+
+    const left = maybe_left orelse self.addTerminal(.inferred_type, fn_begin);
+    const right = maybe_right orelse self.addTerminal(.inferred_type, fn_begin);
+    const result = maybe_result orelse self.addTerminal(.inferred_type, fn_begin);
+    const args = self.addBinary(.fn_type_args, fn_begin, left, right);
+    return self.addBinary(.fn_type, fn_begin, args, result);
 }
 
 fn stringLiteral(self: *Parser) Ast.Handle {

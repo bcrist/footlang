@@ -139,7 +139,7 @@ pub fn init(data: Data, text: []const u8) Token {
         .dot_index_open,
         .dot_block_open,
         .kw_fn,
-        .kw_if
+        .kw_if,
             => 2,
 
         .kw_try,
