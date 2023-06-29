@@ -27,6 +27,8 @@ pub const Info = union(enum) {
     assignment: Binary, // left = right
 
     proc_block: Handle, // { ... }
+    struct_type_literal: Handle, // just list of decls/fields
+    union_type_literal: Binary, // left is field ID type, right is list of decls/fields
 
     group: Handle, // (x)
     logical_not: Handle, // not x
@@ -99,9 +101,9 @@ pub const Info = union(enum) {
     prefix_call: Binary, // left' right
     infix_call: Binary, // left is function, right is infix_call_args
     infix_call_args: Binary,
-    fn_type: Binary, // fn type literal; left is fn_type_args, right is result type
-    fn_type_args: Binary, // left/right argument types for fn type literal
-
+    fn_def: Binary, // left is fn_sig, right is body
+    fn_sig: Binary, // left is fn_sig_args, right is result type expression
+    fn_sig_args: Binary, // left/right are declarations or decl lists when part of a fn_def, otherwise they are type expressions
 };
 
 pub const Binary = struct {

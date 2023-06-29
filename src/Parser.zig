@@ -22,6 +22,7 @@ module: ?Ast.Handle = null,
 expression_memos: std.AutoHashMapUnmanaged(ExpressionMemoKey, AstMemo) = .{},
 expression_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
 field_init_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+decl_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
 
 const ExpressionMemoKey = struct {
     token_handle: Token.Handle,
@@ -43,6 +44,7 @@ pub fn init(gpa: std.mem.Allocator, temp_arena: std.mem.Allocator) Parser {
 }
 
 pub fn deinit(self: *Parser) void {
+    self.decl_list_memos.deinit(self.gpa);
     self.field_init_list_memos.deinit(self.gpa);
     self.expression_list_memos.deinit(self.gpa);
     self.expression_memos.deinit(self.gpa);
@@ -57,6 +59,7 @@ pub fn parse(self: *Parser, source_handle: Source.Handle, token_kinds: []Token.K
     self.expression_memos.clearRetainingCapacity();
     self.expression_list_memos.clearRetainingCapacity();
     self.field_init_list_memos.clearRetainingCapacity();
+    self.decl_list_memos.clearRetainingCapacity();
     self.source_handle = source_handle;
     self.token_kinds = token_kinds;
     self.next_token = 0;
@@ -145,7 +148,7 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
         ast_kind = .variable_declaration;
         has_init = true;
     } else {
-        if (try self.tryExpression(.{})) |type_expr| {
+        if (try self.tryExpression(.{ .allow_calls = false })) |type_expr| {
             type_expr_handle = type_expr;
         } else if (self.tryToken(.kw_mut)) {
             type_expr_handle = self.addTerminal(.mut_inferred_type, self.next_token - 1);
@@ -179,6 +182,38 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     }
 
     return self.addBinary(ast_kind, token_handle, type_expr_handle, init_expr_handle);
+}
+
+fn tryDeclarationList(self: *Parser) SyncError!?Ast.Handle {
+    self.skipLinespace();
+    const token_handle = self.next_token;
+    if (self.decl_list_memos.get(token_handle)) |memo| {
+        self.next_token = memo.next_token;
+        return memo.ast_handle;
+    }
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        const start_of_decl = self.next_token;
+        const decl = try self.tryDeclaration() orelse break;
+        if (maybe_list) |list| {
+            maybe_list = self.addBinary(.list, start_of_decl, list, decl);
+        } else {
+            maybe_list = decl;
+        }
+
+        if (self.tryToken(.comma)) {
+            self.skipWhitespace();
+        } else {
+            break;
+        }
+    }
+
+    self.decl_list_memos.put(self.gpa, token_handle, .{
+        .next_token = self.next_token,
+        .ast_handle = maybe_list,
+    }) catch @panic("OOM");
+    return maybe_list;
 }
 
 fn fieldInitList(self: *Parser) SyncError!Ast.Handle {
@@ -718,16 +753,12 @@ fn tryPrimaryExpression(self: *Parser) SyncError!?Ast.Handle {
             try self.closeMultiLineRegion(token_handle, .index_close, "]", "array literal");
             return self.addUnary(.anonymous_array_literal, token_handle, list);
         },
-        .kw_fn => try self.tryFunctionType(),
-
+        .kw_fn => try self.tryFunctionDefinition() orelse try self.tryFunctionType(),
+        .kw_struct => try self.structTypeLiteral(),
+        .kw_union => try self.unionTypeLiteral(),
 
         .kw_match => {
-            unreachable;
-        },
-        .kw_struct => {
-            unreachable;
-        },
-        .kw_union => {
+            // TODO
             unreachable;
         },
 
@@ -853,8 +884,176 @@ fn tryFunctionType(self: *Parser) SyncError!?Ast.Handle {
     const left = maybe_left orelse self.addTerminal(.inferred_type, fn_begin);
     const right = maybe_right orelse self.addTerminal(.inferred_type, fn_begin);
     const result = maybe_result orelse self.addTerminal(.inferred_type, fn_begin);
-    const args = self.addBinary(.fn_type_args, fn_begin, left, right);
-    return self.addBinary(.fn_type, fn_begin, args, result);
+    const args = self.addBinary(.fn_sig_args, fn_begin, left, right);
+    return self.addBinary(.fn_sig, fn_begin, args, result);
+}
+
+fn tryFunctionDefinition(self: *Parser) SyncError!?Ast.Handle {
+    const begin = self.next_token;
+    self.skipLinespace();
+    const fn_begin = self.next_token;
+    if (!self.tryToken(.kw_fn)) return null;
+    self.skipLinespace();
+
+    const maybe_left = try self.tryDeclarationList();
+
+    var maybe_right: ?Ast.Handle = null;
+
+    self.skipLinespace();
+    if (self.tryToken(.apostrophe)) {
+        maybe_right = try self.tryDeclarationList();
+    }
+
+    var maybe_result: ?Ast.Handle = null;
+    var body: Ast.Handle = undefined;
+
+    self.skipLinespace();
+    if (self.tryToken(.thick_arrow)) {
+        self.skipLinespace();
+        if (try self.tryExpression(.{})) |expr_handle| {
+            body = expr_handle;
+        } else if (maybe_left != null or maybe_right != null) {
+            const error_token = self.next_token;
+            self.recordErrorAbsRange("Failed to parse function definition", .{
+                .first = fn_begin,
+                .last = error_token,
+            }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordErrorAbs("Expected body expression", error_token, .{});
+            return error.Sync;
+        } else {
+            self.next_token = begin;
+            return null;
+        }
+    } else {
+        var after_arrow = self.next_token;
+        if (self.tryToken(.thin_arrow)) {
+            self.skipLinespace();
+            after_arrow = self.next_token;
+            if (try self.tryExpression(.{ .allow_calls = false })) |expr_handle| {
+                maybe_result = expr_handle;
+            } else {
+                const error_token = self.next_token;
+                self.recordErrorAbsRange("Failed to parse function type", .{
+                    .first = fn_begin,
+                    .last = error_token,
+                }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordErrorAbs("Expected type expression", error_token, .{});
+                return error.Sync;
+            }
+        }
+
+        self.skipLinespace();
+        if (self.token_kinds[self.next_token] == .block_open) {
+            body = try self.proceduralBlock();
+        } else if (maybe_left != null or maybe_right != null) {
+            if (maybe_result) |result_handle| {
+                if (self.ast.items[result_handle].info == .proc_block) {
+                    self.recordErrorAbsRange("Failed to parse function definition", .{
+                        .first = fn_begin,
+                        .last = after_arrow,
+                    }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                    self.recordErrorAbs("Expected result type", after_arrow, .{});
+                    return error.Sync;
+                }
+            }
+
+            const error_token = self.next_token;
+            self.recordErrorAbsRange("Failed to parse function definition", .{
+                .first = fn_begin,
+                .last = error_token,
+            }, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordErrorAbs("Expected body block", error_token, .{});
+            return error.Sync;
+        } else {
+            self.next_token = begin;
+            return null;
+        }
+    }
+
+    const left = maybe_left orelse self.addTerminal(.empty, fn_begin);
+    const right = maybe_right orelse self.addTerminal(.empty, fn_begin);
+    const result = maybe_result orelse self.addTerminal(.inferred_type, fn_begin);
+
+    const args = self.addBinary(.fn_sig_args, fn_begin, left, right);
+    const sig = self.addBinary(.fn_sig, fn_begin, args, result);
+    return self.addBinary(.fn_def, fn_begin, sig, body);
+}
+
+fn structTypeLiteral(self: *Parser) SyncError!Ast.Handle {
+    const literal_begin = self.next_token;
+    std.debug.assert(self.token_kinds[literal_begin] == .kw_struct);
+    self.next_token += 1;
+    self.skipLinespace();
+    const block_begin = self.next_token;
+    if (!self.tryToken(.block_open)) {
+        self.recordErrorAbs("Failed to parse struct type literal", literal_begin, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+        self.recordError("Expected '{'", .{});
+        return error.Sync;
+    }
+
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        self.skipLinespace();
+        const decl_start_token = self.next_token;
+        const maybe_decl = self.tryDeclaration() catch {
+            self.syncPastTokenOrLine(.block_close);
+            if (self.token_kinds[self.backtrackToken(self.next_token, .{})] == .block_close) {
+                break;
+            } else {
+                continue;
+            }
+        };
+        if (maybe_decl) |decl_handle| {
+            if (self.tryToken(.block_close)) {
+                if (maybe_list) |list| {
+                    maybe_list = self.addBinary(.list, decl_start_token, list, decl_handle);
+                } else {
+                    maybe_list = decl_handle;
+                }
+                break;
+            } else if (!self.tryNewline()) {
+                self.recordErrorAbs("Failed to parse declaration", self.ast.items[decl_handle].token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected end of line", .{});
+                self.syncPastToken(.newline);
+                continue;
+            }
+
+            if (maybe_list) |list| {
+                maybe_list = self.addBinary(.list, decl_start_token, list, decl_handle);
+            } else {
+                maybe_list = decl_handle;
+            }
+
+        } else if (self.tryToken(.block_close)) {
+            break;
+        } else if (self.tryNewline()) {
+            continue;
+        } else {
+            const first = self.next_token;
+            self.syncPastTokenOrLine(.block_close);
+            var last = self.backtrackToken(self.next_token, .{});
+            if (first + 50 < last) {
+                self.recordErrorAbs("Expected a declaration", first, Error.FlagSet.initOne(.has_continuation));
+                self.recordErrorAbs("End of declaration/assignment/expression", last, Error.FlagSet.initOne(.supplemental));
+            } else {
+                self.recordErrorAbsRange("Expected a declaration", .{
+                    .first = first,
+                    .last = last,
+                }, .{});
+            }
+        }
+    }
+
+    const list = maybe_list orelse self.addTerminal(.empty, block_begin);
+
+    return self.addUnary(.struct_type_literal, block_begin, list);
+}
+
+fn unionTypeLiteral(self: *Parser) SyncError!Ast.Handle {
+    _ = self;
+    // TODO
+    return 0;
 }
 
 fn stringLiteral(self: *Parser) Ast.Handle {
