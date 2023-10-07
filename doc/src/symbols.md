@@ -18,10 +18,10 @@ Just like regular identifiers, symbols with arbitrary names may be constructed f
 Symbols may be assigned to constants, and may be compared with each other for equality.  The symbol name may be extracted as a constant string.
 ```foot
 symbol :: .asdf
-symbol_name: []u8: *@nameof symbol
+symbol_name: []u8: &@name_of symbol
 
 main :: fn {
-    @assert @typeof symbol == @symbol
+    @assert @type_of symbol == @symbol
     if symbol == .asdf { ... }
 }
 ```
@@ -54,6 +54,8 @@ x: U = .abc // unit type coerces to its unit value, which coerces to a union val
 y1: U = 0 as .def // same as 0 as s32
 y2: U = .def.{0} // same as s32.{0}
 ```
+
+Note that an assignment like the above would generate a compile error (ambiguous initialization) if there were two fields in the union with an `s32` payload.
 
 ## Function calls
 When a function is called using a normal identifier, the types of both operands will be searched for overloads, as well as the current scope, but the type of the result will not normally be searched.  If the function call uses a symbol instead of an identifier, then the outward-in inferred result type will be searched for overloads, and _only_ that type will be searched.  For example:

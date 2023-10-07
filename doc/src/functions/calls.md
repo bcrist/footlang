@@ -43,7 +43,7 @@ A pattern that mimics method calls in other languages is possible with struct li
 ```foot
 receiver 'func' .{ .param1 = 1234, .param2 = 3456 }
 ```
-When the fields of the parameter struct have different types, it's often possible to omit the field names, making this syntax equivalent to C-style function calls in terms of brevity:
+When the fields of the parameter struct have different types, it's often possible to omit the field names, making this syntax equivalent to C-style function calls in terms of brevity, while avoiding the pitfalls of positional arguments in C-like langauges.
 ```foot
 receiver 'func' .{ 1234, "asdf", .some_symbol }
 ```

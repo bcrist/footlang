@@ -20,13 +20,17 @@ ast: std.ArrayListUnmanaged(Ast) = .{},
 module: ?Ast.Handle = null,
 
 expression_memos: std.AutoHashMapUnmanaged(ExpressionMemoKey, AstMemo) = .{},
-expression_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
+expression_list_memos: std.AutoHashMapUnmanaged(ExpressionListMemoKey, AstMemo) = .{},
 field_init_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
 decl_list_memos: std.AutoHashMapUnmanaged(Token.Handle, AstMemo) = .{},
 
 const ExpressionMemoKey = struct {
     token_handle: Token.Handle,
     options: ExpressionOptions,
+};
+const ExpressionListMemoKey = struct {
+    token_handle: Token.Handle,
+    options: ExpressionListOptions,
 };
 
 const AstMemo = struct {
@@ -66,7 +70,7 @@ pub fn parse(self: *Parser, source_handle: Source.Handle, token_kinds: []Token.K
 
     while (!self.tryToken(.eof)) {
         const decl_start_token = self.next_token;
-        const maybe_decl = self.tryDeclaration() catch {
+        const maybe_decl = self.tryDeclaration(.{ .allow_anonymous = true }) catch {
             self.syncPastToken(.newline);
             continue;
         };
@@ -107,7 +111,11 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     const start_token = self.next_token;
 
     self.skipLinespace();
-    const token_handle = self.tryIdentifier() orelse self.trySymbol() orelse {
+    const name_token_handle = self.tryIdentifier() orelse self.trySymbol() orelse blk: {
+        if (self.tryToken(.dot)) {
+            break :blk self.next_token - 1;
+        }
+
         self.next_token = start_token;
         return null;
     };
@@ -125,12 +133,12 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     var has_init = false;
 
     self.skipLinespace();
-    if (token_handle > 0 and self.token_kinds[token_handle - 1] == .dot) {
-        ast_kind = .field_declaration;
+    if (name_token_handle > 0 and self.token_kinds[name_token_handle - 1] == .dot) {
+        ast_kind = .struct_field_declaration;
         if (try self.tryExpression(.{})) |type_expr| {
             type_expr_handle = type_expr;
         } else {
-            self.recordErrorAbs("Failed to parse field declaration", token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordErrorAbs("Failed to parse field declaration", name_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
             self.recordError("Expected type expression", .{});
             return error.Sync;
         }
@@ -147,6 +155,116 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
         type_expr_handle = self.addTerminal(.inferred_type, self.next_token - 1);
         ast_kind = .variable_declaration;
         has_init = true;
+    } else {
+        if (try self.tryExpression(.{ .allow_calls = false })) |type_expr| {
+            type_expr_handle = type_expr;
+        } else if (self.tryToken(.kw_mut)) {
+            type_expr_handle = self.addTerminal(.mut_inferred_type, self.next_token - 1);
+        } else {
+            self.recordErrorAbs("Failed to parse declaration", name_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected type expression or ':' or '=' followed by initializer expression", .{});
+            return error.Sync;
+        }
+
+        self.skipLinespace();
+        if (self.tryToken(.colon)) {
+            ast_kind = .constant_declaration;
+            has_init = true;
+        } else if (self.tryToken(.eql)) {
+            ast_kind = .variable_declaration;
+            has_init = true;
+        } else {
+            ast_kind = .variable_declaration;
+        }
+    }
+
+    if (has_init) {
+        self.skipLinespace();
+        init_expr_handle = try self.tryExpression(.{}) orelse {
+            self.recordErrorAbs("Failed to parse declaration", name_token_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+            self.recordError("Expected initializer expression", .{});
+            return error.Sync;
+        };
+    } else {
+        init_expr_handle = self.addTerminal(.empty, name_token_handle);
+    }
+
+    return self.addBinary(ast_kind, name_token_handle, type_expr_handle, init_expr_handle);
+}
+
+
+
+fn tryUnionFieldDeclaration(self: *Parser) SyncError!?Ast.Handle {
+    const start_token = self.next_token;
+
+    const field_ids_list = try self.expressionList(.{ .multi_line = false });
+
+    if (self.ast.items[field_ids_list].info == .empty) {
+        self.next_token = start_token;
+    } else {
+        self.skipLinespace();
+        if (!self.tryToken(.thick_arrow)) {
+            self.next_token = start_token;
+        }
+    }
+
+    if (self.tryDeclarationName()) |name_token| {
+        _ = name_token;
+        self.skipLinespace();
+        if (self.tryToken(.colon)) {
+            self.skipLinespace();
+        }
+        
+    }
+}
+
+// .symbol
+// .symbol : type_expr
+// . : type_expr
+fn tryUnionFieldDeclarationWithoutID(self: *Parser, maybe_id_list: ?Ast.Handle) SyncError!?Ast.Handle {
+    const start_token = self.next_token;
+
+    self.skipLinespace();
+    if (self.trySymbol() orelse self.tryIdentifier()) |name_handle| {
+        self.skipLinespace();
+        if (self.tryToken(.colon)) {
+            self.skipLinespace();
+            const type_expr_handle = (try self.tryExpression(.{})) orelse {
+                self.recordErrorAbs("Failed to parse field declaration", name_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected type expression", .{});
+                return error.Sync;
+            };
+            const id_list = self.addTerminal(.empty, start_token);
+            return self.addBinary(.union_field_declaration, name_handle, id_list, type_expr_handle);
+        } else {
+            const id_list = self.addTerminal(.empty, start_token);
+            const type_expr_handle = self.addTerminal(.inferred_type, start_token);
+            return self.addBinary(.union_field_declaration, name_handle, id_list, type_expr_handle);
+        }
+    } else if (self.tryToken(.dot)) {
+        self.skipLinespace();
+        if (self.tryToken(.colon)) {
+
+            if (try self.tryExpression(.{})) |type_expr| {
+                type_expr_handle = type_expr;
+            } else {
+                self.recordErrorAbs("Failed to parse field declaration", name_handle, Error.FlagSet.initMany(&.{ .supplemental, .has_continuation }));
+                self.recordError("Expected type expression", .{});
+                return error.Sync;
+            }
+
+        }
+    }
+
+    
+    if (token_handle > 0 and self.token_kinds[token_handle - 1] == .dot) {
+        
+        
+
+        self.skipLinespace();
+        if (self.tryToken(.eql)) {
+            has_init = true;
+        }
     } else {
         if (try self.tryExpression(.{ .allow_calls = false })) |type_expr| {
             type_expr_handle = type_expr;
@@ -184,7 +302,39 @@ fn tryDeclaration(self: *Parser) SyncError!?Ast.Handle {
     return self.addBinary(ast_kind, token_handle, type_expr_handle, init_expr_handle);
 }
 
-fn tryDeclarationList(self: *Parser) SyncError!?Ast.Handle {
+fn trySingleLineDeclarationList(self: *Parser) SyncError!?Ast.Handle {
+    self.skipLinespace();
+    const token_handle = self.next_token;
+    if (self.decl_list_memos.get(token_handle)) |memo| {
+        self.next_token = memo.next_token;
+        return memo.ast_handle;
+    }
+    var maybe_list: ?Ast.Handle = null;
+
+    while (true) {
+        const start_of_decl = self.next_token;
+        const decl = try self.tryDeclaration() orelse break;
+        if (maybe_list) |list| {
+            maybe_list = self.addBinary(.list, start_of_decl, list, decl);
+        } else {
+            maybe_list = decl;
+        }
+
+        if (self.tryToken(.comma)) {
+            self.skipWhitespace();
+        } else {
+            break;
+        }
+    }
+
+    self.decl_list_memos.put(self.gpa, token_handle, .{
+        .next_token = self.next_token,
+        .ast_handle = maybe_list,
+    }) catch @panic("OOM");
+    return maybe_list;
+}
+
+fn trySingleLineExpressionList(self: *Parser) SyncError!?Ast.Handle {
     self.skipLinespace();
     const token_handle = self.next_token;
     if (self.decl_list_memos.get(token_handle)) |memo| {
@@ -250,10 +400,22 @@ fn fieldInitList(self: *Parser) SyncError!Ast.Handle {
     return list;
 }
 
-fn expressionList(self: *Parser) SyncError!Ast.Handle {
-    self.skipWhitespace();
+const ExpressionListOptions = struct {
+    allow_multi_line: bool = true,
+};
+
+fn expressionList(self: *Parser, options: ExpressionListOptions) SyncError!Ast.Handle {
+    if (options.allow_multi_line) {
+        self.skipWhitespace();
+    } else {
+        self.skipLinespace();
+    }
+    const key = ExpressionListOptions{
+        .token_handle = self.next_token,
+        .options = options,
+    };
     const token_handle = self.next_token;
-    if (self.expression_list_memos.get(token_handle)) |memo| {
+    if (self.expression_list_memos.get(key)) |memo| {
         self.next_token = memo.next_token;
         return memo.ast_handle.?;
     }
@@ -268,16 +430,24 @@ fn expressionList(self: *Parser) SyncError!Ast.Handle {
             maybe_list = ast_handle;
         }
 
-        if (self.tryToken(.comma) or self.tryNewline()) {
-            self.skipWhitespace();
+        if (options.allow_multi_line) {
+            if (self.tryToken(.comma) or self.tryNewline()) {
+                self.skipWhitespace();
+            } else {
+                break;
+            }
         } else {
-            break;
+            if (self.tryToken(.comma)) {
+                self.skipLinespace();
+            } else {
+                break;
+            }
         }
     }
 
     const list = maybe_list orelse self.addTerminal(.empty, token_handle);
 
-    self.expression_list_memos.put(self.gpa, token_handle, .{
+    self.expression_list_memos.put(self.gpa, key, .{
         .next_token = self.next_token,
         .ast_handle = list,
     }) catch @panic("OOM");
@@ -623,7 +793,7 @@ fn tryOperator(self: *Parser, options: ExpressionOptions) SyncError!?OperatorInf
             info.left_bp = left_base + 0x3E;
             info.right_bp = null;
             info.kind = .typed_array_literal;
-            info.other = try self.expressionList();
+            info.other = try self.expressionList(.{});
             try self.closeMultiLineRegion(t, .index_close, "]", "array literal");
         },
         .index_open => {
@@ -749,7 +919,7 @@ fn tryPrimaryExpression(self: *Parser) SyncError!?Ast.Handle {
         },
         .dot_index_open => {
             self.next_token += 1;
-            const list = try self.expressionList();
+            const list = try self.expressionList(.{});
             try self.closeMultiLineRegion(token_handle, .index_close, "]", "array literal");
             return self.addUnary(.anonymous_array_literal, token_handle, list);
         },
@@ -895,13 +1065,13 @@ fn tryFunctionDefinition(self: *Parser) SyncError!?Ast.Handle {
     if (!self.tryToken(.kw_fn)) return null;
     self.skipLinespace();
 
-    const maybe_left = try self.tryDeclarationList();
+    const maybe_left = try self.trySingleLineDeclarationList();
 
     var maybe_right: ?Ast.Handle = null;
 
     self.skipLinespace();
     if (self.tryToken(.apostrophe)) {
-        maybe_right = try self.tryDeclarationList();
+        maybe_right = try self.trySingleLineDeclarationList();
     }
 
     var maybe_result: ?Ast.Handle = null;
@@ -1456,7 +1626,8 @@ fn dumpAst(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8,
             try writer.writeAll(reset_style);
             try writer.writeByte('\n');
         },
-        .field_declaration,
+        .struct_field_declaration,
+        .union_field_declaration,
         .variable_declaration,
         .constant_declaration => {
             const token = Token.init(.{
@@ -1464,14 +1635,21 @@ fn dumpAst(self: *Parser, ctx: *DumpContext, writer: anytype, label: []const u8,
                 .offset = ctx.token_offsets[ast.token_handle],
             }, ctx.source_text);
             try writer.writeByte(' ');
-            if (tag == .field_declaration) {
+            if (tag == .struct_field_declaration or tag == .union_field_declaration) {
                 try writer.writeByte('.');
             }
-            try writer.print("{s}", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
+            if (token.kind != .dot) {
+                try writer.print("{s}", .{ std.fmt.fmtSliceEscapeUpper(token.text) });
+            }
             try writer.writeAll(reset_style);
             try writer.writeByte('\n');
             const bin = switch (ast.info) {
-                .field_declaration, .variable_declaration, .constant_declaration => |bin| bin,
+                .struct_field_declaration,
+                .union_field_declaration,
+                .variable_declaration,
+                .constant_declaration,
+                => |bin| bin,
+
                 else => unreachable,
             };
             try self.dumpAst(ctx, writer, "L:", bin.left, new_first, new_extra);

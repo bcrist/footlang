@@ -31,26 +31,28 @@ The `@fixed` prefix operator will turn a constant range value into a fixed point
 If the range's element type is a fixed-point type, then the resulting type is a subset of the same type, just (potentially) with reduced range.  Otherwise, the range's element type must be `@rational_constant` and the bounds must be integers, and it will choose the smallest number of bits necessary to encode any integer in the range.  If it contains no negative values, then it will be unsigned.
 
 ## Creation from struct literal
-The `@fixed` operator can also turn a struct literal into a type.  The literal must match one of these struct definitions:
+The `@fixed` operator can also turn a struct literal into a type.  The literal must match one of the following struct definitions:
 ```foot
+Operators: .all + .scalar + .offset + .comparison + .identity + .none
+Rounding: .down + .up + .floor + .ceil + .half_down + .half_up + .half_floor + .half_ceil + .half_even
+
 T: @type: ...
-
-Operators: .all | .scalar | .offset | .comparison | .identity | .none
-
 struct {
-    .base: @type
+    .base: T
     .range: @range T = T.range
-    .ulp: T.ULP = T.ulp
-    .operators: Operators = T.operators
+    .operators: Operators = .all
+    .rounding: Rounding = .down
 }
 struct {
-    .range: @range T
-    .ulp: T.ULP
+    .range: @range @rational_constant
     .operators: Operators = .all
+    .rounding: Rounding = .down
 }
 struct {
-    .range: @range T
+    .range: @range @rational_constant
+    .ulp: @rational_constant
     .operators: Operators = .all
+    .rounding: Rounding = .down
 }
 ```
 
@@ -59,7 +61,7 @@ Examples:
 @fixed .{ u16, 1 ~ 1000 }
 @fixed .{ 1 ~ 1000, 0.25 }
 @fixed .{ u32, .identity }
-@fixed .{ u32, 0.125 } // equivalent to u29x3
+@fixed .{ u32, 0.125, .half_down, .offset } // equivalent to u29x3
 ```
 
 ## Operations
@@ -80,7 +82,7 @@ By default, fixed-point numbers support all the operators you would expect:
 		* Result type may have more bits than the operands
 	* `/`: Exact division; usually requires a rounding cast
 		* Result type may have more fractional bits than the dividend
-	* `^`: Exact exponentiation; usually requires a rounding cast
+    * `^`: Exact exponentiation; usually requires a rounding cast
 		* Result type may have more bits than the operands
 	* `@tdiv`, `@tmod`: Truncated division
 	* `@fdiv`, `@fmod`: Floor division

@@ -22,9 +22,11 @@ if condition {
     // ...
 }
 ```
-In Foot, the result of a procedural block is `nil` when no `break` expression is executed within it, and `else` is the nil-coalescing operator, which means in this case the `else` clause would be executed regardless of whether the condition was true.  That's both unintuitive and unhelpful, so Foot makes a special case for procedural blocks that occur as the target of an `if` expression: they behave as if they ended with `break @done`.  Since `@done` is not `nil`, this makes `if ... else` (and `if ... else if ... else`, etc.) behave just like someone familiar with C would expect.
+In Foot, the result of a procedural block is `nil` when no `break` expression is executed within it, and `else` is the nil-coalescing operator, which means in this case the `else` clause would be executed regardless of whether the condition was true.  That's both unintuitive and unhelpful, so Foot makes a special case for procedural blocks that occur as the target of an `if` expression: they behave as if they ended with a `done` expression (which in turn is syntactic sugar for `break @done`).  Since `@done` is not `nil`, this makes `if ... else` (and `if ... else if ... else`, etc.) behave just like someone familiar with C would expect.
 
-Explicitly using `break nil` (or something equivalent, like `continue`) will still cause the result of a procedural `if` block to be `nil`, so any `else` clause would be executed.
+`done`/`break @done` can be used explicitly to exit an `if` block early, skipping any `else` clause.
+
+`continue`/`break nil` can be used explicitly to exit an `if` block early, executing any `else` clause.
 
 ## Optional Unwrapping
 An `if` expression can also be used to conditionally evaluate an expression, based on whether or not an optional value is `nil`:
@@ -41,3 +43,13 @@ if a := maybe_a, b := maybe_b {
 The optional expressions will be evaluated from left to right, one at a time, and once one is discovered to be `nil`, any remaining optional expressions will not be evaluated.  The result of the `if` expression will then be `nil`.
 
 If an optional is unwrapped with a `mut` type modifier, then its location will overlap with the optional's location, such that any changes to it will affect the original optional.
+
+## Union Unwrapping
+Optional unwrapping is actually a special case of the more general union-unwrapping `if`:
+```foot
+union_value : A+B+C = ...
+if a_value: A = union_value {
+    ...
+}
+```
+This will work as long as there is a union payload that can be coerced to `A`.  If `A` is not explicitly specified, it is the peer-resolved type of all non-unit payload types in the union.

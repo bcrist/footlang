@@ -2,11 +2,11 @@
 An optional type is any union type that has at least two fields, and exactly one of them is `nil`.
 
 Any type can be turned into an optional type with the `?` prefix operator.
-`?T` is syntactic sugar for `nil | T`.  Note that this also means that `??T == ?T`.  If you want a nested optional, it has to be defined like this:
+`?T` is syntactic sugar for `nil + T`.  Note that this means that `??T == ?T`.  If you want to guarantee that another layer of "optionalness" is applied, it has to be defined like this:
 ```foot
 union {
     .: nil
-    .: ?T
+    .: T
 }
 ```
 

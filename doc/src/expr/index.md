@@ -59,11 +59,10 @@ A procedural block contains an ordered list of statements.  A statement may be a
 	* `variable = expr`
 * A partial struct assignment
 	* `variable .= expr`
-* An expression, in some cases
-    * The expression's type, `T`, must be one of:
-        * A zero-size type (e.g. `nil` or `@noreturn`)
-		* An optional of a zero-size type
-    * The expression may be prefixed with the `defer` or `errordefer` keyword
+* A defer statement
+* An expression whose type is either:
+    * A zero-size type (`nil`, `@noreturn`, `@done`, etc.)
+    * An optional of a zero-size type
 
 Since procedural blocks are expressions, they evaluate to a value and are typechecked by the compiler.
 A value can be returned with a `break` expression.  Any control flow paths that exit the block without using a `break` or `return`

@@ -23,7 +23,7 @@ Y :: @range u16x16
 * `x 'intersect' y`: Contract to the intersection of two ranges
 
 ## Memory Layout
-A range is stored as the minimum and maximum values within the range.
+A range is stored as the minimum and maximum values within the range.  In cases where one or both limits of the range are known at compile time, the compiler may choose to inline them.
 
 ## Range Literals
 The `~~` operator creates a range from minimum and maximum operands.  If the operands are rational constants, they must be integers, and the type of the range will be as small as possible.

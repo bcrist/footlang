@@ -19,13 +19,14 @@ The four floating point base types may be prefixed with `@` to create variants w
 ## Creation from struct literal
 Just like `@fixed`, Instead of a constant range, a struct literal may be used to create a float type variant using `@f16`, `@f32`, etc., as long as the struct matches the definition:
 ```foot
-T: @type: ...
+Operators: .all + .offset + .comparison + .identity + .none
+Rounding: .down + .up + .floor + .ceil + .half_down + .half_up + .half_floor + .half_ceil + .half_even
 
-Operators: .all | .offset | .comparison | .identity | .none
-
+T: @type: // f16, f32, f64, or f128
 struct {
     .range: @range T
     .operators: Operators = .all
+    .rounding: Rounding = .half_down
 }
 ```
 Additionally, the `@float` operator can be used with the definition:
@@ -33,7 +34,8 @@ Additionally, the `@float` operator can be used with the definition:
 struct {
     .base: T
     .range: @range T = T.range
-    .operators: Operators = T.operators
+    .operators: Operators = .all
+    .rounding: Rounding = .half_down
 }
 ```
 
@@ -50,7 +52,7 @@ struct {
 		* Result may require overflow and/or rounding casts
 	* `/`: Exact division
 		* Result may require overflow and/or rounding casts
-	* `^`: Exact Exponentiation
+    * `^`: Exact exponentiation
 		* Result may require overflow and/or rounding casts
 	* `@tdiv`, `@tmod`: Truncated division
 	* `@fdiv`, `@fmod`: Floor division

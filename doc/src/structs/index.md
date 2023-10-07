@@ -27,15 +27,15 @@ struct {
 Since anonymous fields can't be accessed by name, they normally would be given unique types so that they can be accessed by type (see [Coercion](#coercion) and [Assignment](#assignment))
 
 ### Type Product Operator
-In type theory, the concept of a struct is sometimes known as a _product type_.  In this vein, Foot provides the `&` operator, which takes two or more types and wraps them in an anonymous struct.  All fields within this struct will also be anonymous.
+In type theory, the concept of a struct is sometimes known as a _product type_.  In this vein, Foot allows the `*` operator to work on types, combining two or more types and wraping them in an anonymous struct.  All fields within this struct will also be anonymous, and the resulting struct will be undimensioned.
 ```foot
-A & B & C == struct {
+A * B * C == struct {
     .: A
     .: B
     .: C
 }
 ```
-Note that more than two fields can be combined with a chain of `&` operators.  If any of the operands are non-dimensioned structs, they will be flattened and their fields will be appended to the resulting anonymous struct.  Values of dimensioned struct types will be embedded as a single field in the result.
+Note that more than two fields can be combined with a chain of `*` operators.  If any of the operands are non-dimensioned structs, they will be flattened and their fields will be appended to the resulting anonymous struct.  Values of dimensioned struct types will be embedded as a single field in the result.
 
 ## Field Copying
 Coercion, assignment, and partial assignment of structs involve copying fields from one struct to another.  If `source` is a field of type `S` in the source struct, and `dest` is a field of type `D` in the destination struct, then `source` is assigned or initialized from `dest` under one of two conditions:
@@ -56,9 +56,11 @@ The assignment above is allowed when all of the following hold:
 * Every field in `dest` can be copied from exactly one field in `source`
 * Every field in `source` can be copied to at least one field in `dest`
 
-### With `@narrow`
+TODO: consider making normal assignment only work if the memory layout is compatible (i.e. no conversion code required).  Use `@convert` or something to indicate that a conversion is acceptable.
+
+### With `%`
 ```foot
-dest = @narrow source
+dest = source%
 ```
 The assignment above is allowed when all of the following hold: 
 * `D` is non-dimensional or has the same dimension as `S`
@@ -81,9 +83,9 @@ The partial assignment above is allowed when exactly one of the following cases 
 	* No field in `dest` can be assigned from multiple fields in `source`
 	* Every field in `source` can be assigned to at least one field in `dest`
 
-### With `@narrow`
+### With `%`
 ```foot
-dest .= @narrow source
+dest .= source%
 ```
 The partial assignment above is allowed when exactly one of the following cases holds:
 * `dest` contains exactly one field that `source` can be coerced to
@@ -106,14 +108,14 @@ dest2 : mut D = ---
 dest2 = source
 ```
 
-### With `@narrow`
+### With `%`
 ```foot
-dest : D = @narrow source
+dest : D = source%
 ```
 The coercion above is allowed as long as the following assignment would be allowed:
 ```foot
 dest2 : mut D = ---
-dest2 = @narrow source
+dest2 = source%
 ```
 
 ### From non-structs
@@ -129,7 +131,7 @@ dest : D = .{ source }
 ```
 
 ## Destructuring
-If multiple comma separated values appear on the left side of an assignment, the compiler wraps them in an anonymous struct.  The values may be variable declarations, or variable references.  Destructuring does not support partial assignment, but you can use `@narrow` on the right side.
+If multiple comma separated values appear on the left side of an assignment, the compiler wraps them in an anonymous struct.  The values may be variable declarations, or variable references.  Destructuring does not support partial assignment, but you can use `%` on the right side.
 ```foot
 main :: fn {
     a : mut u32 = 0

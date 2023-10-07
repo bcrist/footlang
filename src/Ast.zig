@@ -5,8 +5,11 @@ const Ast = @This();
 
 token_handle: Token.Handle,
 info: Info,
+// TODO just have kind, left, and right
 
-pub const Handle = u31;
+pub const Handle = enum(u32) {
+    _
+};
 
 pub const Kind = std.meta.Tag(Info);
 pub const Info = union(enum) {
@@ -22,7 +25,8 @@ pub const Info = union(enum) {
 
     constant_declaration: Binary, // identifier : left : right
     variable_declaration: Binary, // identifier : left = right (`= right` may be omitted, `empty is used instead)
-    field_declaration: Binary,    // symbol : left = right (`= right` may be omitted, `empty` is used instead)
+    struct_field_declaration: Binary,    // symbol : left = right (`= right` may be omitted, `empty` is used instead)
+    union_field_declaration: Binary,     // left => symbol : right
 
     assignment: Binary, // left = right
 

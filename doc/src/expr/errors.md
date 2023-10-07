@@ -19,10 +19,10 @@ maybe_error_expr catch _: default_on_error
 ```
 Therefore `catch` is analogous to `else` except instead of replacing `nil` with a default value, it replaces any value dimensioned with `@error` with a default value.
 
-## `try`
-Manually checking for errors can get tedious, and a lot of functions will just want to propagate any error values up to their caller, which can be done with the `try` operator:
+## Try operator
+Manually checking for errors can get tedious, and a lot of functions will just want to propagate any error values up to their caller, which can be done with the try (`!`) operator:
 ```foot
-try expr
+expr !
 // is roughly equivalent to:
 expr catch e: return e
 ```

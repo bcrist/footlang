@@ -1,5 +1,6 @@
 # Summary
 
+[Introduction](./intro.md)
 [Code Examples](./examples.md)
 
 # Language Reference
@@ -47,3 +48,4 @@
 
 - [Keyword and Built-in List](./keywords.md)
 - [Operator Precedence](./operator_precedence.md)
+- [Source Encoding](./charset.md)

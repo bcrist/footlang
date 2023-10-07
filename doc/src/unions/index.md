@@ -23,14 +23,14 @@ Another frequent use case for unions is representing the same kind of object, bu
 ```foot
 union {
     .: u16
-    .: * f32
+    .: &f32
 }
 ```
 
 This can also be used to create function overload sets (since each function has its own distinct type)
 
 ### Type Sum Operator
-Similar to the `&` operator for wrapping types in a struct, there is a `|` operator which wraps types in a union.  If any of the operands are non-dimensioned unions, they will be flattened and their fields merged with the resulting union.  Dimensioned unions will be embedded as a distinct payload type.
+Similar to the `*` operator for wrapping types in a struct, the `+` operator can wrap types in a union.  If any of the operands are non-dimensioned unions, they will be flattened and their fields merged with the resulting union.  Dimensioned unions will be embedded as a distinct payload type.
 
 When merging unions, if multiple field definitions are structurally equivalent, only one of the matches will be kept.
 ```foot
@@ -42,7 +42,7 @@ B :: union {
 C :: B.apple
 D :: distinct union { .asdf }
 
-A | B | C | D == union {
+A + B + C + D == union {
     .: A
     .apple: B.apple
     .orange: B.orange

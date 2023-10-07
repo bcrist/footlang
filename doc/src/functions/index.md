@@ -3,7 +3,7 @@ C and it's descendants allow functions to take an arbitrary number of arguments 
 
 This might sound limiting, since a large portion of functions need to take more than two parameters, but this can be handled exactly the same way that multiple return values are often handled: use a tuple (struct).  Foot's struct literals make that easy.
 
-Foot's approach has a variety of advantages:.
+Foot's approach has a variety of advantages:
 * Functions can be used as prefix, infix, or suffix operators without needing special syntax or additional language features
 * Calls with many parameters are less fragile when adding/reordering function parameters, since the struct literal will require fields be named when a value could be coerced to the type of more than one field
 * Parameters can be built incrementally before calling the function, and can be shared between multiple calls
@@ -30,6 +30,8 @@ fn ' Right
 fn Left
 fn
 ```
+
+`Left`, `Right`, and `Result` must be constant expressions that evaluate to types.  They may not be a procedural block.
 
 ## Calling Conventions
 TODO

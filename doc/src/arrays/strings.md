@@ -5,7 +5,14 @@ String literals are syntactic sugar for [array literals](./index.md#array-litera
 "Hellorld!"
 ``` 
 
-Only printable ASCII characters, excluding the double quote, are allowed within the quotes.  This means the set of allowable octets are: 32 (space), 33 (`!`), and 35 (`#`) through 126 (`~`).  Octet 92 (`\`) is reserved for escape sequences:
+Inside the quotes, any bytes may appear, except for:
+* `0x22` (`"`), unless preceeded by `\`
+* `0x0A` (LF)
+* `0x00` - `0x08`, `0x0B`, `0x0C`, `0x0E` - `0x1E`, `0x7F`
+	* These C0 control characters are not allowed anywhere in a Foot program
+Additionally, while `0x1F` (Unit Separator) _may_ appear in string literals, it is skipped over by the parser and not included in the actual array of data.  For details on how this character is meant to be used, see [Source Encoding](../charset.md#unit-separators).
+
+Octet 92 (`\`) is reserved for escape sequences:
 ```foot
 "\t" // 9; escaped tab
 "\n" // 10; escaped line feed
@@ -46,6 +53,7 @@ The escape sequence continues until the first closing parenthesis.  The parenthe
 * A hex unicode codepoint symbol, starting with `U+` and followed by 1-6 hex digits
 	* Will be encoded using the canonical (i.e. shortest possible) UTF8 encoding.
 	* The `U` and hex digits `A`-`F` are case-insensitive.
+	* Unicode escapes should generally be preferred over embedding UTF-8 codepoints directly in string literals.
 * An equals character (`=`) followed by a base64-encoded string
 	- Any of the RFC-standardized base64 variants are valid:
 		- `A`-`Z` represent code units 0-25

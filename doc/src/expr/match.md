@@ -59,6 +59,25 @@ match x (
 )
 ```
 
+### Constrained Default Prong
+Often when matching on a union type with many fields, only a few are "interesting", and you don't need to do anything for any of the rest.  This would seem like a good time to use a default prong, but that can be a footgun if a new field is added to the union in the future: the compiler would automatically group that into the default prong as well.  Often it would be nicer to have to explicitly decide what to do with the new field, and have the compiler complain if you forget.
+
+To help with this, the `_` token can be replaced with `@_`, followed by a 5-digit base-62 value which is a hash of all the remaining unmatched fields:
+
+```foot
+match x (
+    .field1 => expr1
+    .field2 => expr2
+    @_ f1Zz4 => default_value
+)
+```
+
+If this hash is not provided or is incorrect, the compiler will generate an error with the expected value.  If a single field was added, the compiler will mention that that field is not handled yet, otherwise it will list all the unhandled fields.
+
+Note that there may still only be one default prong; you can't have multiple constrained default prongs or an unconstrained default prong after a constrained one.  This feature is only meant to avoid the footgun of default prongs when adding new fields to existing unions.
+
+The base-62 hash contains 29 bits of entropy and is guaranteed to be a valid identifier token (in particular, it will never start with a number).  It may or may not be unique; it does not interact with other symbols in the current scope.
+
 ## `any` Values
 When the query expression's type is `any`, the match conditions must be types, dimensions, or `_`.  Payload access works exactly like for unions.
 ```foot

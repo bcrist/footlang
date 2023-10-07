@@ -63,5 +63,3 @@ Addition (`+`), subtraction (`-`), and multiplication (`*`) always yield a new r
 Division (`/`) by zero is a compile error, but otherwise division of two rational constants yields another rational constant.
 
 Exponentiation (`^`) is allowed when the left side is rational, and the right side is an integer.  This is because some exponentiations with fractional exponents result in irrational numbers; e.g. `2^0.5`
-
-

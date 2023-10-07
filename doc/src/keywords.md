@@ -2,10 +2,10 @@
 
 ```
 and     as          bool        break       catch       continue
-defer   distinct    else        error       errordefer  fn
-for     if          in          incomplete  is          match
+defer   distinct    else        error       fn          for
+if      in          incomplete  is          match
 mut     nil         not         only        or          packed
-repeat  return      struct      try         union       unreachable
+repeat  return      struct      union       unreachable
 until   while       with
 ```
 
@@ -42,7 +42,6 @@ until   while       with
 | `@f64 x` | Creates a binary64 float from a range or struct literal |
 | `@f128 x` | Creates a binary128 float from a range or struct literal |
 | `@float x` | Creates a floating point type from a struct literal |
-| `x @narrow` | Asserts that a narrowing coercion is safe |
 | `x @trunc` | Truncate to a full-range fixed point type |
 | `x @wrap` | Wrap any out of range values into the valid range of the result type |
 | `x @saturate` | Clamp any out of range values to the min/max value possible for the type |

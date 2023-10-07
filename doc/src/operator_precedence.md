@@ -31,7 +31,6 @@ TODO: Very WIP...
 | 6 | `union {...}` | Union literal | |
 | 6 | `union: x {...}` | Union literal (explicit ID type) | |
 | 6 | `fn ...` | Function type or definition | |
-| 6 | `try x` | Error propagation | |
 | 6 | `return x` | Function return | |
 | 6 | `break x` | Block return | |
 | 6 | `mut x` | Mutable type modifier | |
@@ -39,14 +38,12 @@ TODO: Very WIP...
 | 6 | `error x` | Error type modifier | |
 | 6 | `@zzzzz x` | Prefix intrinsic operators | |
 | 7 | `x^x` | Exponentiation | right |
-| 8 | `x*x` | Multiplication | left |
+| 8 | `x*x` | Multiplication, type product | left |
 | 8 | `x/x` | Exact Division | left |
-| 9 | `x+x` | Addition | left |
+| 9 | `x+x` | Addition, type sum | left |
 | 9 | `x-x` | Subtraction | left |
 | 10 | `x~x` | Range literal: exclusive end | left |
 | 10 | `x~~x` | Range literal: inclusive end | left |
-| 10 | <code>x\|x</code> | Union type merging | left |
-| 10 | `x&x` | Tuple type literal | left |
 | 11 | `x as x` | Coercion | left |
 | 11 | `x in x` | Dimensioning | left |
 | 11 | `x is x` | Union active field test | left |

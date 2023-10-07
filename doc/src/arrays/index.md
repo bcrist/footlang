@@ -2,7 +2,7 @@
 An array is a constant number of homogeneous values (i.e. having the same type), laid out sequentially in memory.  A single value within the array is known as an _element_.  Each element in an array is identified by its _index_.  The type of the index must be a fixed point type, a unit type, or a union containing only unit type fields.
 
 ## Array Types
-The `[ ... ]` prefix operator turns an element type into an array type.  The type of the index is placed within the brackets, and the type of the element is placed on the right.
+The `[ ... ]` operator turns an element type into an array type.  The type of the index is placed within the brackets, and the type of the element is placed on the right.
 ```foot
 A :: [u4] u32       // 16 elements, indexed 0-15
 B :: [bool] s64     // 2 elements, indexed by false and true

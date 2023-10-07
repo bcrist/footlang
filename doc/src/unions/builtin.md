@@ -20,10 +20,10 @@ true :: bool.true
 false :: bool.false
 ```
 
-# `cmp`
-The `cmp` type is a predefined union that is the result type for the `<=>` operator; typically used for sorting:
+# `@cmp`
+The `@cmp` type is a predefined union that is the result type for the `<=>` operator; typically used for sorting:
 ```foot
-cmp :: union : s2 {
+@cmp :: union : s2 {
     -1 => .less
     0 => .equal
     1 => .greater

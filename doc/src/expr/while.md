@@ -39,18 +39,14 @@ x := while ... {
     if ... break 1234
 } else 2345
 ```
-When you want to break out of a loop, but a value doesn't need to be extracted, you can use the built-in unit type `@done` (or any other unit type besides `nil`):
+When you want to break out of a loop, you can use the `done` keyword (or `break @done`), just like with `if`:
 ```foot
 while ... {
-    if ... break @done
-} else @done
-```
-Note the final `else @done` is required here so that the result of the expression is always `@done` and not `?@done`.  Alternatively the result could be discarded with an underscore assignment:
-```foot
-_ = while ... {
-    if ... break @done
+    if ... done
 }
 ```
+Note that the while loops type in this case is `?@done`.
+
 Most C-like languages have a `continue` keyword that skips the rest of a loop's block, but does not break out of the loop.  In Foot this can be accomplished without an extra keyword; instead you just need `break nil`:
 ```foot
 while ... {
@@ -60,15 +56,15 @@ while ... {
 ```
 Since this isn't very intuitive to readers that aren't familiar with the language, Foot does provide a `continue` keyword that is exactly equivalent to `break nil`, and it is encouraged to use it where possible.
 
-## Optional Unwrapping
-Like an `if` expression, the condition expression of a `while` expression may be replaced with one or more optional-unwrapping declarations, and these declarations will be visible when evaluating the main expression:
+## Union/Optional Unwrapping
+Like an `if` expression, the condition expression of a `while` expression may be replaced with one or more union-unwrapping declarations, and these declarations will be visible when evaluating the main expression:
 ```foot
-while a := maybe_a, b := some_func_returning_optional' nil {
+while a := maybe_a, b : SomeUnionPayload = some_func_returning_union' nil {
     // ...
 }
 ```
-Note that the optional expression(s) will be re-evaluated every loop iteration.  If the unwrapped variables are mutable, and they are changed in the course of the loop, the changes will be overwritten at the start of the next loop.
+Note that the initializer expression(s) will be re-evaluated every loop iteration.  If the unwrapped variables are mutable, and they are changed in the course of the loop, the changes will be overwritten at the start of the next loop.
 
-If an optional is unwrapped with a `mut` type modifier, then its location will overlap with the optional's location, such that any changes to it will affect the original optional.
+If an unwrapped variable is `mut` then its location will overlap with the union, such that any changes to it will affect the original union, if it has a location.  But the union is usually a temporary returned from an iterator function, so the modified value will just be overwritten by the next temporary result.
 
-Optional unwrapping does not work with `repeat` or `until` loops.
+Unwrapping does not work with `repeat` or `until` loops.
