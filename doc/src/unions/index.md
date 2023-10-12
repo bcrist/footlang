@@ -64,12 +64,12 @@ A value of type `T` may be coerced to a union type `U` in either of these cases:
 
 If both cases are possible, the coercion is ambiguous, and therefore not allowed.
 
-Note that unlike structs, coercion from a union type to the type of one of its fields is not allowed.  Use [match](../expr/match.md) or [catch](../expr/errors.md) to ensure that all fields are handled.
+Note that unlike structs, coercion from a union type to the type of one of its fields is not allowed.  Use [map](../expr/map.md) or [catch](../expr/errors.md) to ensure that all fields are handled.
 
 ## `is` operator
-The `is` operator returns `true` if the active field of the union value on the left matches the symbol or type on the right.  Usually it will be better to just use a [`match`](../expr/match.md), but sometimes you just want to check for one thing.
+The `is` operator returns `true` if the active field of the union value on the left matches the symbol or type on the right.  Usually it will be better to just use a [`map` expression](../expr/map.md), but sometimes you just want to check for one thing.
 
 ## Mutability
 If a union value is not `mut`, then none of its fields are `mut`, even if they were declared so.  Note this is a shallow transformation; it does not affect the type of data accessible through pointers or slices.
 
-If a union field is not declared `mut`, but the union value itself is `mut`, then the union can be overwritten by a newly initialized union value, but the value can't be modified after initialization (e.g. with a [`match`](../expr/match.md)).
+If a union field is not declared `mut`, but the union value itself is `mut`, then the union can be overwritten by a newly initialized union value, but the value can't be modified after initialization (e.g. with a [`map`](../expr/map.md)).

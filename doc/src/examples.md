@@ -21,10 +21,10 @@ fibonacci :: fn n: @fixed 0~91 {
 
 slow_fibonacci :: fn n: @fixed 0~91 -> u64 {
     // this is a bad idea without memoization
-    return match n {
+    return n map (
         0, 1 => 1
         _ => (slow_fibonacci' (n-1 %) + (slow_fibonacci' (n-2 %)) %
-    }
+    )
 }
 ```
 

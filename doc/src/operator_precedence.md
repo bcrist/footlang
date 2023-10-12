@@ -26,7 +26,7 @@ TODO: Very WIP...
 | 6 | `.[...]` | Array literal | |
 | 6 | `.{...}` | Struct literal | |
 | 6 | `.(...)` | Union literal | |
-| 6 | `match x {...}` | Match expression | |
+| 6 | `x map (...)` | Map expression | |
 | 6 | `struct {...}` | Struct literal | |
 | 6 | `union {...}` | Union literal | |
 | 6 | `union: x {...}` | Union literal (explicit ID type) | |
@@ -48,7 +48,7 @@ TODO: Very WIP...
 | 11 | `x in x` | Dimensioning | left |
 | 11 | `x is x` | Union active field test | left |
 | 11 | `x else x` | Optional coalescing | left |
-| 11 | `x catch x` | Error handling | left |
+| 11 | `x catch (...)` | Error handling | left |
 | 11 | `x @zzzzz x` | Binary intrinsic operators | left |
 | 12 | `x<x` | Less-than | left |
 | 12 | `x<=x` | Less-than or equal-to | left |

@@ -3,7 +3,7 @@
 ```
 and     as          bool        break       catch       continue
 defer   distinct    else        error       fn          for
-if      in          incomplete  is          match
+if      in          incomplete  is          map
 mut     nil         not         only        or          packed
 repeat  return      struct      union       unreachable
 until   while       with

@@ -8,7 +8,7 @@ The address can be extracted with `v.addr`.
 
 A `mut any` can be reassigned to point to a new value, but even a non-mutable `any` can refer to mutable data, if it is initialized with a value that's mutable.
 
-A `match` expression is be used to access the original value as one of a specific set of types.
+A `map` expression is be used to access the original value as one of a specific set of types.
 
 ## Example
 The poster-child for `any` is an equivalent to C's `printf`:

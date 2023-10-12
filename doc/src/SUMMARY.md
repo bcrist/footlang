@@ -20,7 +20,7 @@
     - [while/until](./expr/while.md)
     - [for](./expr/for.md)
     - [with](./expr/with.md)
-    - [match](./expr/match.md)
+    - [map](./expr/map.md)
     - [Errors](./expr/errors.md)
     - [defer](./expr/defer.md)
 - [Functions](./functions/index.md)

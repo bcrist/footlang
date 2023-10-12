@@ -48,7 +48,7 @@ Finally, some complex expressions have syntax unique to themselves:
 * `if` expressions
 * `for` expressions
 * `while`/`until` expressions
-* `match` expressions
+* `map`/`catch` expressions
 * `with` expressions
 
 ## Procedural Blocks

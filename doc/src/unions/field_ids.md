@@ -17,7 +17,7 @@ If there are unused IDs in the union's ID type, the union may be marked incomple
 ```foot
 incomplete union: u8 { .a, .b, .c }
 ```
-The compiler will ensure that any [match](../expr/match.md) contains a `_` prong to handle these extra encodings.  Non-incomplete unions will always have an implicit [unreachable](builtin.md#unreachable-and-noreturn) prong for `_`.
+The compiler will ensure that any [map](../expr/map.md) contains a `_` prong to handle these extra encodings.  Non-incomplete unions will always have an implicit [unreachable](builtin.md#unreachable-and-noreturn) prong for `_`.
 
 ## Embedded Payloads
 It occasionally makes sense to embed one or more fields' payloads directly in the ID value by providing a list or range of ID values to correlate with a particular field.  Exactly as many values must be specified as there are permutations of the payload value, unless you use an open range, or explicitly let the compiler pick the remaining values:

@@ -18,4 +18,4 @@ The `else` operator can be used to replace nil with a default value:
 optional else default_value
 ```
 
-Optionals can be "unwrapped" with [`if`](../expr/if.md).  If the union contains more than one other field, it's generally better to use [`match`](../expr/match.md)
+Optionals can be "unwrapped" with [`if`](../expr/if.md).  If the union contains more than one other field, it's generally better to use [`map`](../expr/map.md)
