@@ -77,10 +77,10 @@ something := 123 'S.init' 456
 error := 123 '.init' 456
 ```
 
-## Coercion to `@type`
-If a symbol is coerced to `@type`, it becomes a union type with one `@unit` field of the same name.  For example the following declarations are equivalent:
+## Coercion to `@anytype`
+If a symbol is coerced to `@anytype`, it becomes a union type with one `@unit` field of the same name.  For example the following declarations are equivalent:
 ```foot
-A: @type: .hello
+A: @anytype: .hello
 B :: union { .hello }
 C :: union { .hello: @unit }
 ```
@@ -103,4 +103,4 @@ e : E = t as .X // u8 coercion (outward in), followed by union coercion
 x := t as .X  // u64 coercion (inward out)
 t2 : E = x    // union coercion
 ```
-This might seem confusing, since `as` normally requires a `@type` value on the right side, so you might expect that the symbol would turn into a new anonymous union type here.  But that behavior isn't useful here, so we explicitly override with behavior that is useful in this case.
+This might seem confusing, since `as` normally requires a `@anytype` value on the right side, so you might expect that the symbol would turn into a new anonymous union type here.  But that behavior isn't useful here, so we explicitly override with behavior that is useful in this case.

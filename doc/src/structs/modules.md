@@ -18,16 +18,30 @@ Color :: union {
 You can refer to a module's type within the module itself using the `@module` built-in.
 
 ## Importing Modules
-Other modules can be imported using the `@import` built-in.  The identifier following `@import` exists outside the module's scope, and instead is resolved by the build system.  `@import` is an expression, and the imported constant is the result, so you can assign it to a name in your module like you would any other constant:
+Other modules can be imported using the `@import` prefix operator.  The right-side expression can have any type, but it must be a constant (and usually [symbols](symbols) are used).  The build system then looks up the module, and the result of the `@import` expression is the constant that was exported by that module.  You can use it directly in an expression or assign it to a name in your module like you would any other constant:
 ```foot
-Goods :: @import Goods
-Services :: @import Services
+Goods :: @import .Goods
+Services :: @import .Services
 ```
-Since this results in a lot of duplicate identifiers, the `@import` expression itself can also be treated as a constant declaration, where it defines a symbol within the current scope using the same name as the module name:
+Within declarative scopes, an `@import` declaration can be used to reduce boilerplate.  The following is functionally identical to the above snippet:
 ```foot
 @import Goods
 @import Services
 ```
+Note that there is no `::` or `:=` token which normally appears in a declaration, and this only works when you would normally import a symbol expression (as above).  The symbol to import is constructed using the same name as the identifier being declared.
+
+### "Generic" Imports
+Foot does not have types with parametric polymorphism (commonly known as Generics).  Foot instead relies on code generation to avoid requiring programmers to re-implement data structures and algorithms for every use case.  The main way this is accomplished is by `@import`ing a constant struct literal.  The struct type itself identifies what code generator to use (i.e. the generic type) and the struct fields are analyzed to determine how to generate that specific instance (equivalent to generic type parameters).  For example, here are some data structure generators provided in the standard library:
+```
+Int_List :: @import @Array_List.{ i32 }
+My_Hash_Map :: @import @Hash_Map.{ .k = i32, .v = Some_Other_Type }
+```
+
+## Module Lookup
+When the compiler is used as a library, module lookup is performed by a callback that must be provided when starting the compiler.
+
+The standalone compiler allows a build script to do the same thing, but also provides a default implementation that searches for dependencies on the filesystem, and generates code for data structures found in the standard library
+
 
 # Aside: Build System Integration
 The default build system uses the filesystem to automatically discover modules.

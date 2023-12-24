@@ -21,10 +21,35 @@ expr catch ( e: => return e )
 ```
 
 # TODO: Error Context Data
-When an error is returned, the PC is saved to a special stack allocator.
+When an error is returned, the PC (or some value that can uniquely identify a source location) is saved to a special stack allocator.
 If there were any @context variables in scope at the time of the return, their data is copied to the temporary allocator, and a pointer to the copied data is saved to the error stack allocator.
 This allows the context data to be retrieved when printing an error message, etc.
-TODO figure out how to access context data programmatically - @next_error_context iterator?
+TODO figure out how to access context data programmatically - @get_error_context returns slice?  Or some iterator function defined in the std?
+Allow a function to reset any error data currently on the error stack - same as it would when returning, but without needing to actually return.  Programs can call this after logging an error manually if they think another error might happen before returning.
 
 If a function can call another function that might return an error, then the size of the error allocator is saved to a hidden variable upon function entry.
 If the function then does _not_ return an error itself, the error allocator is reset to it's original size; discarding any error info generated during that function.
+
+# TODO: Allocators
+opaque - opaque type but without size or alignment data - just an address.
+
+General allocator interface:
+```foot
+Allocator :: distinct struct {
+    data: ?&opaque
+    impl: &fn data: ?&opaque ' v: ?[]u8, size: usize, align_bits: ualign, min_count: usize, max_count: usize -> &mut[]u8
+
+    // Codegen will automatically generate versions of these functions as needed, and put them into an overload set.
+    alloc   :: fn Allocator ' T: @type_of Some_Type, len: usize -> []mut Some_Type
+    dupe    :: fn Allocator ' v: []Some_Type -> []mut Some_Type
+    free    :: fn Allocator ' v: []Some_Type
+    realloc :: fn Allocator ' v: []Some_Type, len: usize -> []mut Some_Type     // min_count = len, max_count = len
+    resize  :: fn Allocator ' v: []Some_Type, len: usize => []mut Some_Type     // min_count = @min(len, v.len), max_count = len
+    create  :: fn Allocator ' T: @type_of Some_Type -> &mut Some_Type
+    clone   :: fn Allocator ' v: &Some_Type -> &mut Some_Type
+    destroy :: fn Allocator ' v: &Some_Type
+}
+```
+
+If an allocation request can't be fulfilled due to insufficient memory, etc. the allocator implementation will @panic.
+Fallible_Allocator works the same as Allocator except allocating functions can return `error Allocation_Failed` instead of @panicing.

@@ -15,7 +15,7 @@ meta_func :: fn _: (fn i32) {}
 
 main :: fn {
     meta_func' fn a {
-        @assert @typeof a == i32
+        @assert @type_of a == i32
     }
 }
 ```

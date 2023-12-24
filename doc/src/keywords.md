@@ -14,7 +14,7 @@ until   while       with
 | Usage | Description |
 |---|---|
 | `@fixed x` | Creates a fixed-point type from a range or struct literal |
-| `@type` | Represents the type of types |
+| `@anytype` | Represents the type of types |
 | `dividend @tdiv divisor` | Truncated division |
 | `dividend @fdiv divisor` | Floor division |
 | `dividend @cdiv divisor` | Ceiling division |
@@ -64,8 +64,37 @@ until   while       with
 | `x @undim` | Dimension removal |
 | `@assert x` | Runtime assertion |
 | `@require x` | Compile-time assertion |
-| `@typeof x` | Determine the result type of an expression without evaluating it |
+| `@type_of x` | Determine the result type of an expression without evaluating it |
 | `@import x` | Used to import another module |
 | `@export x` | Used to change the constant corresponding to the current module |
 | `@module` | The type of the current module |
 | `@nameof x` | Get the name of a symbol, type, or field |
+
+# Naming Conventions
+
+Apart from the reserved names above, users are free to use whatever naming convention they prefer, however users are encouraged to adopt the naming convention used by the standard library.  The rules of that convention are as follows:
+
+* Type names for aggregates (structs, unions, and arrays) having non-zero size shall be rendered in "proper snake case".
+* All other names shall be rendered in "lower snake case".  This includes:
+    * Variable names
+    * Constant names (except constants referring to aggregate types as above)
+    * Function names
+    * Dimension names
+    * Numeric type names
+    * Range type names
+    * Pointer/slice type names (when assigned to an alias)
+    * Empty struct/union type names (i.e. unit types and namespaces)
+    * Symbol names
+    * Struct and union field names
+* When an identifier is created by adding a prefix and/or suffix to another identifier, the capitalization of the original identifier should be retained, but the prefix/suffix should be named as above.
+
+## Proper Snake Case Rules
+
+* All words are separated by underscores
+* All letters within acronyms and initialisms are capitalized
+* For all other words, only the first letter is capitalized
+
+## Lower Snake Case Rules
+
+* All words are separated by underscores
+* All words use only lowercase letters and/or numbers

@@ -81,7 +81,7 @@ S :: struct {
     .b: u32,
     .c: u8,
 }
-for field: @type, type: @type = S {
+for field: @anytype, type: @anytype = S {
     // ...
 }
 ```
